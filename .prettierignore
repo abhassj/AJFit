@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+build
+next-env.d.ts
+package-lock.json
+
+# Spec documents — kept as authored.
+AJFit_PRD_v1.md
+AJFit_Implementation_Plan.md
