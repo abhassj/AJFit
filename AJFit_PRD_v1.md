@@ -1,9 +1,15 @@
 # AJ's Workout Tracker — Product Requirements Document (v1)
 
 **Status:** Draft
-**Version:** 1.0
-**Last updated:** August 4, 2026
+**Version:** 1.1
+**Last updated:** August 6, 2026
 **Owner:** AJ
+
+---
+
+## Changelog
+
+**v1.1** — Exercise catalog restructured from a flat category/exercise list into a 3-level hierarchy: Category → Subcategory → Exercise, sourced from AJ's Gym Exercise Library & Execution Guide. Target muscle and technique ("how to perform") info now lives once per subcategory rather than per exercise. The `movement_pattern`-based automatic alternates feature is dropped — sibling exercises within the same subcategory now serve that purpose structurally. Sections 3, 6.2, 6.3, 7.1, and 8 updated accordingly.
 
 ---
 
@@ -42,7 +48,7 @@ Existing fitness apps solve some of this but overcorrect the other way — they'
 - Let AJ build a weekly workout program with full customizability, similar in spirit to the Google Sheets workflow.
 - Provide a fast, thumb-friendly mobile logging experience for use during an actual gym session.
 - Track workout history with real dates, so progress and consistency are visible over time (calendar view, stats).
-- Maintain a reusable exercise catalog with categories and informational alternates.
+- Maintain a reusable, hierarchically organized exercise catalog (Category → Subcategory → Exercise) with built-in technique guidance.
 - Ship as a responsive web app first; architect so a native iOS/Android release (App Store / Play Store) is a build step later, not a rewrite.
 
 ### Non-Goals (v1)
@@ -65,18 +71,18 @@ Existing fitness apps solve some of this but overcorrect the other way — they'
 
 ## 5. Technology Stack
 
-| Layer                             | Choice                                  | Rationale                                                                                                                                                                                 |
-| --------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Frontend framework                | **Next.js + React + TypeScript**        | AJ's existing expertise; best-in-class ecosystem for the spreadsheet-like grid the app depends on                                                                                         |
-| Program builder grid              | **Glide Data Grid** (or TanStack Table) | Canvas/virtualized grid libraries purpose-built for spreadsheet-like performance, keyboard navigation, and large datasets — not achievable at the same quality in React Native            |
-| Styling                           | **Tailwind CSS**                        | Fast to build with, consistent across web and future native shell                                                                                                                         |
-| State & data fetching             | **TanStack Query + Zustand**            | Server cache/sync via React Query; lightweight local UI state via Zustand                                                                                                                 |
-| Database                          | **Postgres via Supabase**               | Workout data is inherently relational (program → day → exercise → session → set); SQL makes trend queries, "last time" lookups, and future analytics straightforward                      |
-| Auth                              | **Supabase Auth**                       | Bundled with the database service, minimal extra setup                                                                                                                                    |
-| Offline-first sync (native phase) | **PowerSync or ElectricSQL**            | Brings Firebase-style local-first offline reliability to Postgres, needed once the app is used inside gyms with poor connectivity                                                         |
-| Native app shell (future)         | **Capacitor**                           | Wraps the same Next.js/React codebase into real iOS/Android builds with native plugin access (haptics, local notifications for rest timers) — avoids a second UI codebase in React Native |
-| Web hosting                       | **Vercel**                              | Standard Next.js deployment target                                                                                                                                                        |
-| Native build/release (future)     | **Capacitor + native store tooling**    | For eventual App Store / Play Store submission                                                                                                                                            |
+| Layer | Choice | Rationale |
+|---|---|---|
+| Frontend framework | **Next.js + React + TypeScript** | AJ's existing expertise; best-in-class ecosystem for the spreadsheet-like grid the app depends on |
+| Program builder grid | **Glide Data Grid** (or TanStack Table) | Canvas/virtualized grid libraries purpose-built for spreadsheet-like performance, keyboard navigation, and large datasets — not achievable at the same quality in React Native |
+| Styling | **Tailwind CSS** | Fast to build with, consistent across web and future native shell |
+| State & data fetching | **TanStack Query + Zustand** | Server cache/sync via React Query; lightweight local UI state via Zustand |
+| Database | **Postgres via Supabase** | Workout data is inherently relational (program → day → exercise → session → set); SQL makes trend queries, "last time" lookups, and future analytics straightforward |
+| Auth | **Supabase Auth** | Bundled with the database service, minimal extra setup |
+| Offline-first sync (native phase) | **PowerSync or ElectricSQL** | Brings Firebase-style local-first offline reliability to Postgres, needed once the app is used inside gyms with poor connectivity |
+| Native app shell (future) | **Capacitor** | Wraps the same Next.js/React codebase into real iOS/Android builds with native plugin access (haptics, local notifications for rest timers) — avoids a second UI codebase in React Native |
+| Web hosting | **Vercel** | Standard Next.js deployment target |
+| Native build/release (future) | **Capacitor + native store tooling** | For eventual App Store / Play Store submission |
 
 ### Rollout phasing
 
@@ -98,15 +104,16 @@ Existing fitness apps solve some of this but overcorrect the other way — they'
 
 ### 6.2 Exercises Page
 
-- A browsable list of all exercises stored in the database, organized by category (e.g. Chest, Back, Legs).
-- Each exercise entry shows relevant info and a list of **alternate exercises** — informational only, surfaced automatically based on shared movement pattern (see §8, Design Decisions) rather than manually curated.
+- A browsable exercise catalog organized as a 3-level hierarchy: **Category** (exactly 6 — Chest, Back, Shoulders, Legs, Arms, Abs & Core) → **Subcategory** (a movement grouping, e.g. "Incline Press Variations," "Vertical Pull Variations") → individual **exercise variations** (e.g. "Incline Dumbbell Press").
+- Each subcategory displays its target muscle(s) and a technique ("how to perform") description once, shared across every exercise variation underneath it — matching how AJ's source exercise library is actually organized.
+- Exercises within the same subcategory function as each other's natural alternates. This is structural, not a separate feature: browsing to "Incline Press Variations" simply shows all three variations together, with no automatic-matching logic needed (see §8, Design Decisions).
 
 ### 6.3 Programs Page
 
 - The program builder — where AJ constructs his own weekly plan, mirroring the flexibility of the old Google Sheets setup.
 - Structured around a **Monday–Sunday weekly template**.
 - Full customizability in laying out exercises, order, and rep prescriptions.
-- Exercises are added by pulling from the Exercises catalog (§6.2), which is organized by category.
+- Exercises are added via a **3-level cascading selector**: Category → Subcategory (filtered by the chosen category) → Exercise (filtered by the chosen subcategory), pulling from the Exercises catalog (§6.2).
 - **Rest days** can be marked on any day of the week, replacing that day's exercise list with a rest indicator.
 - **Save** persists the program as a single living template — there is no versioning/duplication step (see §8).
 - **Edit anytime** — an edit (pencil) icon puts the builder into edit mode so the existing program can be updated in place at any time.
@@ -132,105 +139,113 @@ The schema is split into two halves: a **template** (the reusable weekly program
 
 **`profiles`**
 
-| Column          | Type      | Notes                         |
-| --------------- | --------- | ----------------------------- |
-| id              | uuid (PK) | References Supabase auth user |
-| goal_bodyweight | numeric   | Single target value           |
-| created_at      | timestamp |                               |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | References Supabase auth user |
+| goal_bodyweight | numeric | Single target value |
+| created_at | timestamp | |
 
 **`weight_logs`**
 
-| Column   | Type      | Notes                                  |
-| -------- | --------- | -------------------------------------- |
-| id       | uuid (PK) |                                        |
-| user_id  | uuid (FK) |                                        |
-| log_date | date      |                                        |
-| weight   | numeric   | Current bodyweight = most recent entry |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| user_id | uuid (FK) | |
+| log_date | date | |
+| weight | numeric | Current bodyweight = most recent entry |
 
 **`categories`**
 
-| Column | Type      | Notes                        |
-| ------ | --------- | ---------------------------- |
-| id     | uuid (PK) |                              |
-| name   | string    | e.g. "Chest," "Back," "Legs" |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| name | string | Exactly 6 rows: Chest, Back, Shoulders, Legs, Arms, Abs & Core |
+
+**`subcategories`**
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| category_id | uuid (FK) | |
+| name | string | e.g. "Incline Press Variations" |
+| target_muscle | string | e.g. "Upper Chest (Clavicular Head), Anterior Deltoids" |
+| how_to_perform | text | Technique description, shared by all exercises in this subcategory |
 
 **`exercises`**
 
-| Column           | Type      | Notes                                               |
-| ---------------- | --------- | --------------------------------------------------- |
-| id               | uuid (PK) |                                                     |
-| category_id      | uuid (FK) |                                                     |
-| name             | string    |                                                     |
-| movement_pattern | string    | e.g. "horizontal push" — used to surface alternates |
-| description      | text      |                                                     |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| subcategory_id | uuid (FK) | |
+| name | string | e.g. "Incline Dumbbell Press" |
 
 **`programs`**
 
-| Column     | Type      | Notes |
-| ---------- | --------- | ----- |
-| id         | uuid (PK) |       |
-| user_id    | uuid (FK) |       |
-| name       | string    |       |
-| created_at | timestamp |       |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| user_id | uuid (FK) | |
+| name | string | |
+| created_at | timestamp | |
 
 **`program_days`**
 
-| Column      | Type      | Notes              |
-| ----------- | --------- | ------------------ |
-| id          | uuid (PK) |                    |
-| program_id  | uuid (FK) |                    |
-| day_of_week | string    | Mon–Sun            |
-| title       | string    | e.g. "Chest & Tri" |
-| is_rest_day | boolean   |                    |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| program_id | uuid (FK) | |
+| day_of_week | string | Mon–Sun |
+| title | string | e.g. "Chest & Tri" |
+| is_rest_day | boolean | |
 
 **`program_exercises`**
 
-| Column          | Type      | Notes                                 |
-| --------------- | --------- | ------------------------------------- |
-| id              | uuid (PK) |                                       |
-| program_day_id  | uuid (FK) |                                       |
-| exercise_id     | uuid (FK) | References catalog                    |
-| prescribed_reps | string    | e.g. "3x6-10"                         |
-| exercise_order  | int       |                                       |
-| custom_fields   | jsonb     | User-defined extra tracked attributes |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| program_day_id | uuid (FK) | |
+| exercise_id | uuid (FK) | References catalog |
+| prescribed_reps | string | e.g. "3x6-10" |
+| exercise_order | int | |
+| custom_fields | jsonb | User-defined extra tracked attributes |
 
 ### 7.2 Log tables (dated, historical)
 
 **`sessions`**
 
-| Column          | Type                | Notes                                 |
-| --------------- | ------------------- | ------------------------------------- |
-| id              | uuid (PK)           |                                       |
-| user_id         | uuid (FK)           |                                       |
-| program_day_id  | uuid (FK, nullable) | Template this session was based on    |
-| session_date    | date                |                                       |
-| status          | enum                | `completed`, `skipped`, `in_progress` |
-| start_time      | timestamp           |                                       |
-| end_time        | timestamp           |                                       |
-| paused_duration | interval            | Total time paused                     |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| user_id | uuid (FK) | |
+| program_day_id | uuid (FK, nullable) | Template this session was based on |
+| session_date | date | |
+| status | enum | `completed`, `skipped`, `in_progress` |
+| start_time | timestamp | |
+| end_time | timestamp | |
+| paused_duration | interval | Total time paused |
 
 **`session_exercises`**
 
-| Column              | Type      | Notes                                       |
-| ------------------- | --------- | ------------------------------------------- |
-| id                  | uuid (PK) |                                             |
-| session_id          | uuid (FK) |                                             |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| session_id | uuid (FK) | |
 | program_exercise_id | uuid (FK) | Template exercise this instance is based on |
-| status              | enum      | `pending`, `completed`, `skipped`           |
-| completed_at        | timestamp |                                             |
-| comment             | text      | Per-exercise, per-session free-text note    |
+| status | enum | `pending`, `completed`, `skipped` |
+| completed_at | timestamp | |
+| comment | text | Per-exercise, per-session free-text note |
 
 **`sets`**
 
-| Column              | Type      | Notes                                 |
-| ------------------- | --------- | ------------------------------------- |
-| id                  | uuid (PK) |                                       |
-| session_exercise_id | uuid (FK) |                                       |
-| set_number          | int       |                                       |
-| reps_done           | int       |                                       |
-| weight              | numeric   |                                       |
-| comment             | text      |                                       |
-| custom_fields       | jsonb     | User-defined extra tracked attributes |
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid (PK) | |
+| session_exercise_id | uuid (FK) | |
+| set_number | int | |
+| reps_done | int | |
+| weight | numeric | |
+| comment | text | |
+| custom_fields | jsonb | User-defined extra tracked attributes |
 
 ---
 
@@ -242,7 +257,7 @@ A running log of the notable decisions made while scoping this PRD, and why:
 2. **Exercise catalog vs. program-exercise instance.** The Exercises page needs a standalone, browsable library; the Programs page needs to attach program-specific data (rep ranges, order) to entries from that library. These are modeled as two separate tables.
 3. **One living template, not versioned.** The program is edited in place rather than duplicated week-to-week (unlike the old spreadsheet tabs). Historical progress is captured through the `sessions`/`sets` log instead, which removes the need for manual week-to-week duplication.
 4. **Explicit skip marking.** Both whole-session skips and individual-exercise skips are user-triggered actions (not inferred from absence of data), so intentional rest is distinguishable from "not logged yet."
-5. **Alternates via movement pattern, not manual curation.** Since alternates are purely informational, they're surfaced automatically by matching `movement_pattern` rather than requiring AJ to hand-pair every exercise — more accurate than category alone (e.g. it won't suggest a chest fly as an "alternate" to a bench press) and zero ongoing maintenance.
+5. **Exercise catalog is a 3-level hierarchy (Category → Subcategory → Exercise), and alternates come from that structure for free.** This replaces the earlier `movement_pattern`-based matching approach. Target muscle and "how to perform" info live once on the subcategory rather than being repeated on every exercise underneath it, since that's how AJ's source exercise library is actually organized, and it avoids duplicating the same paragraph across 3-4 sibling rows. Since alternates are purely informational, the exercises grouped in the same subcategory already serve that role directly — no separate lookup, matching logic, or maintenance required.
 6. **JSONB `custom_fields` on exercises and sets.** This is the mechanism that preserves spreadsheet-style flexibility — new tracked attributes (RPE, tempo, machine setting, etc.) can be added per exercise or per set without a schema migration.
 7. **Bodyweight as a time series, not a single field.** A `weight_logs` table (rather than a single "current weight" column) means "current" is simply the latest entry, and a trend chart becomes possible with no extra modeling later.
 

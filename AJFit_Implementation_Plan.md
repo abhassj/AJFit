@@ -1,9 +1,15 @@
 # AJFit — Implementation Plan
 
 **Status:** Draft
-**Version:** 1.0
-**Last updated:** August 4, 2026
+**Version:** 1.1
+**Last updated:** August 6, 2026
 **Companion doc:** AJ's Workout Tracker PRD v1
+
+---
+
+## Changelog
+
+**v1.1** — Exercise catalog restructured from a flat `categories` + `exercises` (with a `movement_pattern` tag) into a 3-level hierarchy: `categories` → `subcategories` → `exercises`. Target muscle and technique ("how to perform") info now lives once per subcategory rather than per exercise. The automatic "alternates" feature is dropped — sibling exercises within the same subcategory now serve that purpose structurally, with no extra lookup logic needed. Phase 1, 2, and 3 task lists updated accordingly.
 
 ---
 
@@ -17,17 +23,17 @@ Each phase below has a goal, a task checklist, and a **Definition of Done**. Don
 
 ## Phase overview
 
-| Phase | Name                            | Depends on |
-| ----- | ------------------------------- | ---------- |
-| 0     | Project Setup & Foundations     | —          |
-| 1     | Database Schema & Seed Data     | Phase 0    |
-| 2     | Exercises Page                  | Phase 1    |
-| 3     | Programs Page (Builder)         | Phase 1, 2 |
-| 4     | Start Workout / Session Logging | Phase 3    |
-| 5     | Home Page                       | Phase 4    |
-| 6     | Mobile Polish & PWA             | Phase 2–5  |
-| 7     | Native App Release              | Phase 6    |
-| 8     | Post-Launch Enhancements        | Phase 7    |
+| Phase | Name | Depends on |
+|---|---|---|
+| 0 | Project Setup & Foundations | — |
+| 1 | Database Schema & Seed Data | Phase 0 |
+| 2 | Exercises Page | Phase 1 |
+| 3 | Programs Page (Builder) | Phase 1, 2 |
+| 4 | Start Workout / Session Logging | Phase 3 |
+| 5 | Home Page | Phase 4 |
+| 6 | Mobile Polish & PWA | Phase 2–5 |
+| 7 | Native App Release | Phase 6 |
+| 8 | Post-Launch Enhancements | Phase 7 |
 
 ---
 
@@ -51,28 +57,29 @@ Each phase below has a goal, a task checklist, and a **Definition of Done**. Don
 
 ## Phase 1 — Database Schema & Seed Data
 
-**Goal:** Every table from the PRD exists in Supabase, secured, and the exercise catalog has real starting data.
+**Goal:** Every table exists in Supabase, secured, and the exercise catalog is fully seeded with a real 3-level hierarchy.
 
-- [ ] Write SQL migration for all core tables: `profiles`, `weight_logs`, `categories`, `exercises`, `programs`, `program_days`, `program_exercises`, `sessions`, `session_exercises`, `sets`
-- [ ] Add Row Level Security policies scoping every table to the authenticated user
-- [ ] Seed `categories` (Chest, Back, Legs, Shoulders, Core, etc.)
-- [ ] Seed `exercises` from AJ's existing spreadsheet exercise list, tagged with `movement_pattern`
-- [ ] Verify schema via test queries in Supabase Studio
+- [ ] Write SQL migration for all core tables: `profiles`, `weight_logs`, `categories`, `subcategories`, `exercises`, `programs`, `program_days`, `program_exercises`, `sessions`, `session_exercises`, `sets`
+- [ ] `subcategories` carries `target_muscle` and `how_to_perform` (shared once across all exercises within it); `exercises` references `subcategory_id` only — no `movement_pattern` column
+- [ ] Add Row Level Security policies scoping every user-owned table to the authenticated user; `categories`, `subcategories`, and `exercises` remain open shared catalog data
+- [ ] Seed `categories` — exactly 6: Chest, Back, Shoulders, Legs, Arms, Abs & Core
+- [ ] Seed `subcategories` and `exercises` from the Gym Exercise Library & Execution Guide (24 subcategories across the 6 categories, each with its target muscle, technique description, and exercise variations)
+- [ ] Verify schema via test queries in Supabase Studio, including a join across exercises → subcategories → categories to confirm the hierarchy resolves correctly
 
-**Definition of Done:** Full schema live in Supabase, seeded with AJ's real exercises, queryable and access-controlled.
+**Definition of Done:** Full schema live in Supabase, seeded with the complete exercise hierarchy, queryable and access-controlled.
 
 ---
 
 ## Phase 2 — Exercises Page
 
-**Goal:** A working, browsable exercise catalog.
+**Goal:** A working, hierarchically browsable exercise catalog.
 
 - [ ] Build the Exercises page route and layout
-- [ ] List all exercises, filterable/grouped by category
+- [ ] Browse by category → subcategory, with each subcategory showing its target muscle and technique description once
+- [ ] List exercise variations under each subcategory
 - [ ] Exercise detail view
-- [ ] "Alternates" section, pulling exercises that share a `movement_pattern`
 
-**Definition of Done:** AJ can browse the full catalog by category and see relevant alternates for any exercise.
+**Definition of Done:** AJ can browse the full catalog by category and subcategory, see the technique and target muscle info for each movement group, and see which exercises are grouped together as natural variations of each other.
 
 ---
 
@@ -82,14 +89,14 @@ Each phase below has a goal, a task checklist, and a **Definition of Done**. Don
 
 - [ ] Small spike: prototype the grid library choice (Glide Data Grid vs. TanStack Table) to confirm feel before committing
 - [ ] Build the weekly Mon–Sun layout shell
-- [ ] Exercise picker pulling from the catalog, grouped by category
+- [ ] Exercise picker as a 3-level cascading select: Category → Subcategory (filtered by category) → Exercise (filtered by subcategory)
 - [ ] Prescribed reps entry, exercise ordering within a day
 - [ ] Rest day toggle per day
 - [ ] Save program (updates the living template in place — no versioning)
 - [ ] Edit mode via pencil icon
-- [ ] _(Stretch)_ Custom fields (JSONB) support surfaced in the builder UI
+- [ ] *(Stretch)* Custom fields (JSONB) support surfaced in the builder UI
 
-**Definition of Done:** AJ can fully build, save, and edit a real weekly program end-to-end, matching or exceeding the flexibility of the old spreadsheet.
+**Definition of Done:** AJ can fully build, save, and edit a real weekly program end-to-end — including picking exercises through the category/subcategory cascade — matching or exceeding the flexibility of the old spreadsheet.
 
 ---
 
