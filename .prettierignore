@@ -5,6 +5,10 @@ build
 next-env.d.ts
 package-lock.json
 
+# Supabase CLI scratch output (git-ignored, but Prettier still walks it).
+supabase/.temp
+supabase/.branches
+
 # Spec documents — kept as authored.
 AJFit_PRD_v1.md
 AJFit_Implementation_Plan.md
