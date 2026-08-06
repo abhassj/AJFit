@@ -1,26 +1,91 @@
 @import 'tailwindcss';
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * AJFit is a dark-only app (see docs/AJFit_Design_Language.md). Bind the `dark:`
+ * variant to an explicit class rather than the OS preference so Phase 0's auth
+ * pages, which were written with `dark:` variants, render correctly regardless
+ * of the visitor's system theme.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+@theme {
+  /* Color tokens — docs/AJFit_Design_Language.md */
+  --color-base: #13161b;
+  --color-card: #1e2126;
+  /* Raised surface for rows sitting on top of a card. Not in the doc; derived
+     one step up from --color-card so nested surfaces stay distinguishable. */
+  --color-card-raised: #262a31;
+  --color-hairline: #2c3038;
+
+  --color-primary: #f6f9fe;
+  /* The doc's `text-secondary` (#6E6E6E) measures 3.17:1 on --color-card, which
+     fails WCAG AA for body text. Kept below as --color-faint for the decorative
+     uses it suits (dividers, disabled glyphs); --color-secondary is lightened to
+     #8B9099 (5.03:1) so captions and descriptions stay readable. */
+  --color-secondary: #8b9099;
+  --color-faint: #6e6e6e;
+
+  --color-danger: #e5484d;
+  --color-success: #22c55e;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    color-scheme: dark;
+    /*
+     * The base colour lives here, not on <body>. A block-level background on
+     * <body> paints above negative z-index descendants, which would hide the
+     * fixed `-z-10` page backdrop entirely. On <html> it becomes the canvas
+     * background and the backdrop composites over it correctly.
+     */
+    background-color: var(--color-base);
+  }
+
+  body {
+    color: var(--color-primary);
+    font-family: var(--font-sans), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /*
+   * The all-caps, letter-spaced label used for every section header in the
+   * mockups ("TARGET MUSCLES", "HOW TO PERFORM", "SESSION TIMER").
+   */
+  .label-caps {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-secondary);
+  }
+
+  /*
+   * The card surface from the design doc. Slightly translucent with a blur so
+   * the ambient backdrop reads through instead of being masked out by a wall of
+   * opaque panels, plus a 1px top inset highlight to lift it off the base.
+   */
+  .surface {
+    border: 1px solid var(--color-hairline);
+    background-color: color-mix(in srgb, var(--color-card) 72%, transparent);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
+      0 1px 2px 0 rgb(0 0 0 / 0.4);
+  }
+}
+
+/* Respect users who have asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

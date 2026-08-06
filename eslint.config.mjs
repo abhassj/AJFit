@@ -15,6 +15,9 @@ const eslintConfig = defineConfig([
     'out/**',
     'build/**',
     'next-env.d.ts',
+    // Supabase CLI scratch output — git-ignored, and minified vendor code.
+    'supabase/.temp/**',
+    'supabase/.branches/**',
   ]),
 ])
 

@@ -43,18 +43,32 @@ Only the Supabase **publishable/anon** key belongs in `.env.local` — never the
 
 ## Project status
 
-Phase 0 (Project Setup & Foundations) — a deployed, authenticated skeleton.
-No application schema or feature pages yet; those begin in Phase 1.
+Phase 2 complete — auth foundations, the full catalog schema, and a read-only
+Exercises catalog. Program (Phase 3), Start Workout (Phase 4) and Home
+(Phase 5) are placeholder routes so the bottom navigation has four real
+destinations.
+
+Visual reference: [docs/AJFit_Design_Language.md](./docs/AJFit_Design_Language.md).
 
 ## Structure
 
 ```
 src/
   app/
+    (app)/          Signed-in shell — ambient backdrop + bottom tab navigation
+      page.tsx        Home (placeholder until Phase 5)
+      workouts/       Exercise catalog, and [exerciseId] detail
+      program/        Placeholder — Phase 3
+      start/          Placeholder — Phase 4
     auth/           Server actions, shared auth form, email-confirm handler
     sign-in/        Sign-in page
     sign-up/        Sign-up page
-    page.tsx        Protected home
-  lib/supabase/     Browser client, server client, proxy session refresh
+  components/       Shared UI — nav, backdrop, catalog browser, icon set
+  lib/
+    catalog.ts        Server-side catalog queries
+    catalog-types.ts  Shapes and pure helpers, safe for Client Components
+    supabase/         Browser client, server client, proxy session refresh
   proxy.ts          Next.js proxy (formerly middleware) — refresh + route guard
+
+supabase/migrations/  SQL migrations, applied via the GitHub integration
 ```

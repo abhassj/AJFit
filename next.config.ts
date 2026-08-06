@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // The default bottom-left dev badge sits directly on top of the Home tab in
+  // the bottom navigation. Move it rather than disable it, so compile and
+  // runtime errors still surface during development.
+  devIndicators: {
+    position: 'top-right',
+  },
 }
 
 export default nextConfig
