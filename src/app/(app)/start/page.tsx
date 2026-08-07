@@ -1,14 +1,36 @@
-import { PhasePlaceholder } from '@/components/phase-placeholder'
+import { SessionRunner } from '@/components/session-runner'
+import { SessionSummary, StartWorkout } from '@/components/start-workout'
+import { getProgramDay } from '@/lib/program'
+import { DAY_LABELS, todayDayOfWeek } from '@/lib/program-types'
+import { getSessionForDate } from '@/lib/session'
 
-export const metadata = { title: 'Start · AJFit' }
+export const metadata = { title: 'Start Workout · AJFit' }
 
-export default function StartPage() {
-  return (
-    <PhasePlaceholder
-      title="Start Workout"
-      phase="Phase 4"
-      icon="play"
-      description="Session logging — timer, per-set entry, and per-exercise notes — lands here."
-    />
-  )
+// Today's date and today's session both change outside this render, so never
+// serve this page from a cache.
+export const dynamic = 'force-dynamic'
+
+export default async function StartPage() {
+  const dow = todayDayOfWeek()
+  const [{ day }, session] = await Promise.all([
+    getProgramDay(dow),
+    getSessionForDate(),
+  ])
+
+  const dayLabel = DAY_LABELS[dow]
+
+  if (session && session.status === 'in_progress') {
+    return (
+      <SessionRunner
+        session={session}
+        dayTitle={day.title?.trim() || dayLabel}
+      />
+    )
+  }
+
+  if (session) {
+    return <SessionSummary session={session} dayLabel={dayLabel} />
+  }
+
+  return <StartWorkout day={day} dayLabel={dayLabel} />
 }

@@ -7,32 +7,6 @@ import type {
   ExerciseDetail,
 } from '@/lib/catalog-types'
 
-/**
- * Display order for the six categories.
- *
- * The catalog tables have no sort column, and Postgres gives no ordering
- * guarantee, so seed order cannot be recovered from the database. This is
- * purely a presentation concern, so the canonical order lives here rather than
- * in a schema change. Anything not listed sorts to the end, alphabetically.
- */
-const CATEGORY_ORDER = [
-  'Chest',
-  'Back',
-  'Shoulders',
-  'Legs',
-  'Arms',
-  'Abs & Core',
-]
-
-function byCategoryOrder(a: CatalogCategory, b: CatalogCategory) {
-  const ai = CATEGORY_ORDER.indexOf(a.name)
-  const bi = CATEGORY_ORDER.indexOf(b.name)
-  if (ai === -1 && bi === -1) return a.name.localeCompare(b.name)
-  if (ai === -1) return 1
-  if (bi === -1) return -1
-  return ai - bi
-}
-
 const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name)
 
@@ -40,21 +14,32 @@ const byName = (a: { name: string }, b: { name: string }) =>
  * Fetches the whole catalog in a single nested query. The dataset is small
  * (6 categories / 26 subcategories / 86 exercises), so it is cheaper to fetch
  * once and structure in memory than to paginate or lazy-load per category.
+ *
+ * Categories and subcategories are ordered by their `sort_order` column.
+ * Exercises have no ordering column and are listed alphabetically.
  */
 export async function getCatalog(): Promise<CatalogCategory[]> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase.from('categories').select(`
+  const { data, error } = await supabase
+    .from('categories')
+    .select(
+      `
       id,
       name,
+      sort_order,
       subcategories (
         id,
         name,
+        sort_order,
         target_muscle,
         how_to_perform,
         exercises ( id, name )
       )
-    `)
+    `,
+    )
+    .order('sort_order')
+    .order('sort_order', { referencedTable: 'subcategories' })
 
   if (error) {
     throw new Error(`Failed to load the exercise catalog: ${error.message}`)
@@ -63,13 +48,12 @@ export async function getCatalog(): Promise<CatalogCategory[]> {
   const categories = (data ?? []) as CatalogCategory[]
 
   for (const category of categories) {
-    category.subcategories.sort(byName)
     for (const subcategory of category.subcategories) {
       subcategory.exercises.sort(byName)
     }
   }
 
-  return categories.sort(byCategoryOrder)
+  return categories
 }
 
 /**

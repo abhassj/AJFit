@@ -7,12 +7,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
-  // The default bottom-left dev badge sits directly on top of the Home tab in
-  // the bottom navigation. Move it rather than disable it, so compile and
-  // runtime errors still surface during development.
-  devIndicators: {
-    position: 'top-right',
-  },
+  /*
+   * At the mobile widths this app is designed for, the dev badge overlaps a
+   * real control in every corner: bottom-left/right hit the navigation tabs,
+   * top-left the back link, top-right the Program edit button. It also
+   * intercepts pointer events, which blocks those controls outright. Next still
+   * surfaces compile and runtime errors with the indicator hidden.
+   */
+  devIndicators: false,
 }
 
 export default nextConfig

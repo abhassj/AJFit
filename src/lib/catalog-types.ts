@@ -14,6 +14,7 @@ export type CatalogExercise = {
 export type CatalogSubcategory = {
   id: string
   name: string
+  sort_order: number
   target_muscle: string
   how_to_perform: string
   exercises: CatalogExercise[]
@@ -22,6 +23,7 @@ export type CatalogSubcategory = {
 export type CatalogCategory = {
   id: string
   name: string
+  sort_order: number
   subcategories: CatalogSubcategory[]
 }
 

@@ -97,6 +97,70 @@ export function TargetIcon({ className }: IconProps) {
   )
 }
 
+export function PencilIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4 20h4l10-10a2.5 2.5 0 0 0-3.5-3.5L4.5 16.5z" />
+      <path d="m13.5 7 3.5 3.5" />
+    </svg>
+  )
+}
+
+export function PlusIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  )
+}
+
+export function TrashIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M4 7h16" />
+      <path d="M9.5 7V5h5v2" />
+      <path d="M6.5 7 7.5 20h9L17.5 7" />
+      <path d="M10.5 11v5" />
+      <path d="M13.5 11v5" />
+    </svg>
+  )
+}
+
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="m5 12.5 4.5 4.5L19 7" />
+    </svg>
+  )
+}
+
+export function PauseIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M9 5v14" />
+      <path d="M15 5v14" />
+    </svg>
+  )
+}
+
+export function SkipIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M6 6 6 18" />
+      <path d="M10 12 19 6v12z" />
+    </svg>
+  )
+}
+
+export function RestIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a6.8 6.8 0 0 0 11 11z" />
+    </svg>
+  )
+}
+
 export function SwapIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>

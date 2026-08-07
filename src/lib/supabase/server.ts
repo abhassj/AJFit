@@ -12,6 +12,15 @@ export async function createClient() {
   const cookieStore = await cookies()
 
   return createServerClient(url, anonKey, {
+    global: {
+      /*
+       * Next patches global fetch and dedupes identical GETs within a render.
+       * Supabase queries go through fetch, so a read repeated after a write in
+       * the same request would be served the stale pre-write response. Opt every
+       * data request out of that cache — none of this is static content.
+       */
+      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+    },
     cookies: {
       getAll() {
         return cookieStore.getAll()
