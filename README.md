@@ -43,10 +43,9 @@ Only the Supabase **publishable/anon** key belongs in `.env.local` — never the
 
 ## Project status
 
-Phase 2 complete — auth foundations, the full catalog schema, and a read-only
-Exercises catalog. Program (Phase 3), Start Workout (Phase 4) and Home
-(Phase 5) are placeholder routes so the bottom navigation has four real
-destinations.
+Phase 5 complete — all four pages are real: Home dashboard, Exercises catalog,
+the weekly Program builder, and Start Workout session logging. Remaining work
+is Phase 6 (mobile polish + PWA) onward.
 
 Visual reference: [docs/AJFit_Design_Language.md](./docs/AJFit_Design_Language.md).
 
@@ -56,10 +55,11 @@ Visual reference: [docs/AJFit_Design_Language.md](./docs/AJFit_Design_Language.m
 src/
   app/
     (app)/          Signed-in shell — ambient backdrop + bottom tab navigation
-      page.tsx        Home (placeholder until Phase 5)
+      page.tsx        Home dashboard — week summary, calendar, bodyweight, stats
       workouts/       Exercise catalog, and [exerciseId] detail
-      program/        Placeholder — Phase 3
-      start/          Placeholder — Phase 4
+      program/        Weekly Mon-Sun program builder
+      start/          Start Workout and session logging
+      history/[date]/ Read-only detail for a logged session
     auth/           Server actions, shared auth form, email-confirm handler
     sign-in/        Sign-in page
     sign-up/        Sign-up page

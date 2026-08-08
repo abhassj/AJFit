@@ -145,10 +145,11 @@ export function PauseIcon({ className }: IconProps) {
 }
 
 export function SkipIcon({ className }: IconProps) {
+  // Skip-forward: triangle pointing right, with the stop bar after it.
   return (
     <svg {...base(className)}>
-      <path d="M6 6 6 18" />
-      <path d="M10 12 19 6v12z" />
+      <path d="M5 6.5 14 12 5 17.5z" />
+      <path d="M18 6v12" />
     </svg>
   )
 }
