@@ -29,6 +29,13 @@ export type CalendarDay = {
   dayOfMonth: number | null
   status: DayStatus | null
   isToday: boolean
+  /**
+   * Whether the day is still ahead. Kept separate from `status` because a
+   * future rest day resolves to `rest`, not `upcoming`, and must still not be
+   * offered as loggable. Computed on the server so it cannot drift with the
+   * client's clock or timezone.
+   */
+  isFuture: boolean
   sessionId: string | null
 }
 
@@ -42,11 +49,6 @@ export type HomeData = {
     month: number
     label: string
     days: CalendarDay[]
-  }
-  bodyweight: {
-    current: number | null
-    currentLoggedOn: string | null
-    goal: number | null
   }
   stats: {
     totalCompleted: number

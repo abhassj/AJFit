@@ -31,7 +31,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
   const muscles = splitTargetMuscles(subcategory.target_muscle)
 
   return (
-    <main className="px-4 pt-6">
+    <main className="px-4 pt-2">
       <Link
         href="/workouts"
         className="inline-flex items-center gap-2 py-2 text-sm text-secondary transition-colors hover:text-primary"

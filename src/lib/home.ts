@@ -16,6 +16,21 @@ import {
   type WeekDay,
 } from '@/lib/home-types'
 
+const DOW_ORDER = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+] as const
+
+/** Monday-first weekday for a Date, matching the program's day_of_week. */
+function dowFor(date: Date): DayOfWeek {
+  return DOW_ORDER[(date.getDay() + 6) % 7]
+}
+
 type SessionRow = {
   id: string
   session_date: string
@@ -41,6 +56,79 @@ function resolveStatus(
   // Today counts as upcoming until something is logged — the day is not over.
   if (date >= today) return 'upcoming'
   return 'missed'
+}
+
+/** Builds the padded month grid for a given year/month, with session state. */
+async function buildMonth(
+  year: number,
+  month: number,
+  now: Date,
+): Promise<{ label: string; days: CalendarDay[] }> {
+  const supabase = await createClient()
+  const today = dateKey(now)
+
+  const monthStart = dateKey(new Date(year, month, 1))
+  const monthEnd = dateKey(new Date(year, month + 1, 0))
+
+  const [sessionsResult, program] = await Promise.all([
+    supabase
+      .from('sessions')
+      .select('id, session_date, status')
+      .gte('session_date', monthStart)
+      .lte('session_date', monthEnd),
+    getOrCreateProgram(),
+  ])
+
+  if (sessionsResult.error) {
+    throw new Error(`Failed to load sessions: ${sessionsResult.error.message}`)
+  }
+
+  const byDate = new Map<string, SessionRow>()
+  for (const s of (sessionsResult.data ?? []) as SessionRow[]) {
+    const existing = byDate.get(s.session_date)
+    if (!existing || existing.status === 'in_progress') {
+      byDate.set(s.session_date, s)
+    }
+  }
+
+  const restByDow = new Map<DayOfWeek, boolean>(
+    program.days.map((d) => [d.day_of_week, d.is_rest_day]),
+  )
+
+  const days: CalendarDay[] = monthGrid(year, month).map((date) => {
+    if (!date) {
+      return {
+        date: null,
+        dayOfMonth: null,
+        status: null,
+        isToday: false,
+        isFuture: false,
+        sessionId: null,
+      }
+    }
+    const key = dateKey(date)
+    const session = byDate.get(key)
+    return {
+      date: key,
+      dayOfMonth: date.getDate(),
+      status: resolveStatus(
+        session,
+        restByDow.get(dowFor(date)) ?? false,
+        key,
+        today,
+      ),
+      isToday: key === today,
+      isFuture: key > today,
+      sessionId: session?.id ?? null,
+    }
+  })
+
+  return { label: monthLabel(month, year), days }
+}
+
+/** A single month's calendar, used by the Home calendar's month swipe. */
+export async function getMonthCalendar(year: number, month: number) {
+  return buildMonth(year, month, new Date())
 }
 
 /**
@@ -76,54 +164,29 @@ export async function getHomeData(now: Date = new Date()): Promise<HomeData> {
 
   const thirtyDayStart = dateKey(addDays(now, -29))
 
-  const [
-    sessionsResult,
-    totalResult,
-    recentResult,
-    weightResult,
-    profileResult,
-    program,
-  ] = await Promise.all([
-    supabase
-      .from('sessions')
-      .select('id, session_date, status')
-      .gte('session_date', rangeStart)
-      .lte('session_date', rangeEnd)
-      .order('session_date'),
-    supabase
-      .from('sessions')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'completed'),
-    supabase
-      .from('sessions')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'completed')
-      .gte('session_date', thirtyDayStart)
-      .lte('session_date', today),
-    supabase
-      .from('weight_logs')
-      .select('weight, log_date')
-      .order('log_date', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    // No profiles row is created at signup, so "missing" is a valid state.
-    supabase
-      .from('profiles')
-      .select('goal_bodyweight')
-      .eq('id', user.id)
-      .maybeSingle(),
-    getOrCreateProgram(),
-  ])
+  const [sessionsResult, totalResult, recentResult, program] =
+    await Promise.all([
+      supabase
+        .from('sessions')
+        .select('id, session_date, status')
+        .gte('session_date', rangeStart)
+        .lte('session_date', rangeEnd)
+        .order('session_date'),
+      supabase
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed'),
+      supabase
+        .from('sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'completed')
+        .gte('session_date', thirtyDayStart)
+        .lte('session_date', today),
+      getOrCreateProgram(),
+    ])
 
   if (sessionsResult.error) {
     throw new Error(`Failed to load sessions: ${sessionsResult.error.message}`)
-  }
-  if (weightResult.error) {
-    throw new Error(`Failed to load bodyweight: ${weightResult.error.message}`)
-  }
-  if (profileResult.error) {
-    throw new Error(`Failed to load profile: ${profileResult.error.message}`)
   }
 
   const sessions = (sessionsResult.data ?? []) as SessionRow[]
@@ -163,27 +226,23 @@ export async function getHomeData(now: Date = new Date()): Promise<HomeData> {
         dayOfMonth: null,
         status: null,
         isToday: false,
+        isFuture: false,
         sessionId: null,
       }
     }
     const key = dateKey(date)
     const session = byDate.get(key)
-    const dow = (
-      [
-        'monday',
-        'tuesday',
-        'wednesday',
-        'thursday',
-        'friday',
-        'saturday',
-        'sunday',
-      ] as const
-    )[(date.getDay() + 6) % 7]
     return {
       date: key,
       dayOfMonth: date.getDate(),
-      status: resolveStatus(session, restByDow.get(dow) ?? false, key, today),
+      status: resolveStatus(
+        session,
+        restByDow.get(dowFor(date)) ?? false,
+        key,
+        today,
+      ),
       isToday: key === today,
+      isFuture: key > today,
       sessionId: session?.id ?? null,
     }
   })
@@ -193,11 +252,6 @@ export async function getHomeData(now: Date = new Date()): Promise<HomeData> {
     weekStart: dateKey(weekStartDate),
     weekEnd: dateKey(weekEndDate),
     month: { year, month, label: monthLabel(month, year), days },
-    bodyweight: {
-      current: weightResult.data?.weight ?? null,
-      currentLoggedOn: weightResult.data?.log_date ?? null,
-      goal: profileResult.data?.goal_bodyweight ?? null,
-    },
     stats: {
       totalCompleted: totalResult.count ?? 0,
       completedLast30Days: recentResult.count ?? 0,

@@ -43,9 +43,10 @@ Only the Supabase **publishable/anon** key belongs in `.env.local` — never the
 
 ## Project status
 
-Phase 5 complete — all four pages are real: Home dashboard, Exercises catalog,
-the weekly Program builder, and Start Workout session logging. Remaining work
-is Phase 6 (mobile polish + PWA) onward.
+Phase 6 complete. Auth, the exercise catalog, the weekly program builder,
+session logging, the Home dashboard, a profile page with avatar upload, and
+retroactive logging of past days are all working. PWA manifest and service
+worker remain a separate future step.
 
 Visual reference: [docs/AJFit_Design_Language.md](./docs/AJFit_Design_Language.md).
 
@@ -54,19 +55,24 @@ Visual reference: [docs/AJFit_Design_Language.md](./docs/AJFit_Design_Language.m
 ```
 src/
   app/
-    (app)/          Signed-in shell — ambient backdrop + bottom tab navigation
-      page.tsx        Home dashboard — week summary, calendar, bodyweight, stats
+    (app)/          Signed-in shell — backdrop, header with avatar, bottom nav
+      page.tsx        Home dashboard (week summary, stats, calendar)
       workouts/       Exercise catalog, and [exerciseId] detail
       program/        Weekly Mon-Sun program builder
-      start/          Start Workout and session logging
-      history/[date]/ Read-only detail for a logged session
+      start/          Live session logging with timer
+      history/[date]/ Any calendar day — view, edit, or backfill a session
+      profile/        Display name, avatar, bio, bodyweight and goal
     auth/           Server actions, shared auth form, email-confirm handler
     sign-in/        Sign-in page
     sign-up/        Sign-up page
-  components/       Shared UI — nav, backdrop, catalog browser, icon set
+  assets/           Static-imported images (optimised by next/image)
+  components/       Shared UI — nav, backdrops, motion primitives, keypad
   lib/
-    catalog.ts        Server-side catalog queries
-    catalog-types.ts  Shapes and pure helpers, safe for Client Components
+    catalog.ts        Catalog queries      catalog-types.ts   client-safe types
+    program.ts        Program queries      program-types.ts   client-safe types
+    session.ts        Session queries      session-types.ts   client-safe types
+    home.ts           Dashboard queries    home-types.ts      client-safe types
+    profile.ts        Profile queries
     supabase/         Browser client, server client, proxy session refresh
   proxy.ts          Next.js proxy (formerly middleware) — refresh + route guard
 

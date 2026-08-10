@@ -21,5 +21,5 @@ export default async function HomePage() {
 
   const data = await getHomeData()
 
-  return <HomeDashboard data={data} email={user.email ?? ''} />
+  return <HomeDashboard data={data} />
 }

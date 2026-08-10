@@ -196,7 +196,7 @@ export function ProgramBuilder({
   }
 
   return (
-    <main className="px-4 pt-8">
+    <main className="px-4 pt-2">
       <header className="flex items-start justify-between gap-3 px-1 pb-5">
         <div>
           <p className="label-caps">Weekly Template</p>

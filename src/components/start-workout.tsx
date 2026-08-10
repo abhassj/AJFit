@@ -48,7 +48,7 @@ export function StartWorkout({
   }
 
   return (
-    <main className="px-4 pt-8">
+    <main className="px-4 pt-2">
       <header className="px-1 pb-5">
         <p className="label-caps">{dayLabel}</p>
         <h1 className="mt-1.5 text-[26px] leading-tight font-bold tracking-tight text-primary">
@@ -176,7 +176,7 @@ export function SessionSummary({
   const totalSets = session.exercises.reduce((n, e) => n + e.sets.length, 0)
 
   return (
-    <main className="px-4 pt-8">
+    <main className="px-4 pt-2">
       <header className="px-1 pb-5 text-center">
         <div className="surface mx-auto flex h-14 w-14 items-center justify-center rounded-2xl">
           {skipped ? (

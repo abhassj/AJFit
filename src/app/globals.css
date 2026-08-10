@@ -65,18 +65,34 @@
   }
 
   /*
-   * The card surface from the design doc. Slightly translucent with a blur so
-   * the ambient backdrop reads through instead of being masked out by a wall of
-   * opaque panels, plus a 1px top inset highlight to lift it off the base.
+   * The card surface from the design doc.
+   *
+   * Deliberately carries NO backdrop-filter. It used to blur(16px), and because
+   * every card uses this class that meant 26+ separate backdrop snapshots on a
+   * fully expanded catalog — one of the most expensive things you can ask a
+   * mobile GPU to do while scrolling. The backdrop still reads through via
+   * translucency alone; the blur was buying very little for its cost.
+   *
+   * The inset top highlight plus a soft drop shadow provide the elevation the
+   * blur was implicitly giving.
    */
   .surface {
     border: 1px solid var(--color-hairline);
-    background-color: color-mix(in srgb, var(--color-card) 72%, transparent);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
+    background-color: color-mix(in srgb, var(--color-card) 88%, transparent);
     box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
-      0 1px 2px 0 rgb(0 0 0 / 0.4);
+      inset 0 1px 0 0 rgb(255 255 255 / 0.05),
+      0 1px 2px 0 rgb(0 0 0 / 0.35),
+      0 8px 24px -12px rgb(0 0 0 / 0.5);
+  }
+
+  /* Nested surface, for rows sitting on top of a card. */
+  .surface-inset {
+    border: 1px solid var(--color-hairline);
+    background-color: color-mix(
+      in srgb,
+      var(--color-card-raised) 70%,
+      transparent
+    );
   }
 }
 

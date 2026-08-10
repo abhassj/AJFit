@@ -1,5 +1,6 @@
 'use client'
 
+import { AnimatePresence, m, useReducedMotion } from 'framer-motion'
 import { useMemo, useState, useTransition } from 'react'
 
 import {
@@ -41,6 +42,8 @@ export function SessionRunner({
   )
   const [error, setError] = useState<string | null>(null)
   const [, startTransition] = useTransition()
+
+  const reduced = useReducedMotion()
 
   // Ticks once a second; 0 until mounted, so SSR and first paint agree.
   const now = useNow()
@@ -108,7 +111,7 @@ export function SessionRunner({
   }
 
   return (
-    <main className="px-4 pt-6 pb-4">
+    <main className="px-4 pt-2 pb-4">
       <header className="px-1 pb-5">
         <p className="label-caps">Logging Session</p>
         <h1 className="mt-1.5 text-[26px] leading-tight font-bold tracking-tight text-primary">
@@ -156,13 +159,50 @@ export function SessionRunner({
       </section>
 
       {active ? (
-        <ExercisePanel
-          key={active.id}
-          exercise={active}
-          index={session.exercises.findIndex((e) => e.id === active.id) + 1}
-          total={session.exercises.length}
-          onRun={run}
-        />
+        <div className="overflow-hidden">
+          <AnimatePresence mode="wait" initial={false}>
+            {/*
+             * Swiping moves to the next or previous pending exercise. Only `x`
+             * is animated — a transform, so the gesture stays on the compositor
+             * and never triggers layout.
+             */}
+            <m.div
+              key={active.id}
+              initial={reduced ? false : { opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={reduced ? undefined : { opacity: 0, x: -50 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              drag={reduced ? false : 'x'}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.18}
+              onDragEnd={(_, info) => {
+                const pending = session.exercises.filter(
+                  (e) => e.status === 'pending',
+                )
+                const at = pending.findIndex((e) => e.id === active.id)
+                if (info.offset.x < -60 && at < pending.length - 1) {
+                  setActiveId(pending[at + 1].id)
+                } else if (info.offset.x > 60 && at > 0) {
+                  setActiveId(pending[at - 1].id)
+                }
+              }}
+            >
+              <ExercisePanel
+                exercise={active}
+                index={
+                  session.exercises.findIndex((e) => e.id === active.id) + 1
+                }
+                total={session.exercises.length}
+                onRun={run}
+              />
+            </m.div>
+          </AnimatePresence>
+          {remaining.length > 0 && (
+            <p className="px-1 pt-3 text-center text-[12px] text-faint">
+              Swipe left or right to move between exercises.
+            </p>
+          )}
+        </div>
       ) : (
         remaining.length === 0 && (
           <p className="surface mt-3 rounded-2xl px-5 py-6 text-center text-sm text-secondary">

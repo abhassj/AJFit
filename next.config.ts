@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
    * surfaces compile and runtime errors with the indicator hidden.
    */
   devIndicators: false,
+  images: {
+    // AVIF first: the backdrop is a large flat-black photograph, which is
+    // exactly the case AVIF compresses far better than WebP.
+    formats: ['image/avif', 'image/webp'],
+  },
 }
 
 export default nextConfig

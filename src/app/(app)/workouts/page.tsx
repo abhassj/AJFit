@@ -13,7 +13,7 @@ export default async function WorkoutsPage() {
   const totalGroups = categories.reduce((n, c) => n + c.subcategories.length, 0)
 
   return (
-    <main className="px-4 pt-8">
+    <main className="px-4 pt-2">
       <header className="px-1 pb-6 text-center">
         <h1 className="text-[13px] font-bold tracking-[0.18em] text-primary uppercase">
           Exercise Catalog

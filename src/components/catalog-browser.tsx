@@ -3,6 +3,8 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
+import { StaggerItem, StaggerList } from '@/components/motion'
+
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -107,57 +109,59 @@ export function CatalogBrowser({
   const [openId, setOpenId] = useState<string | null>(null)
 
   return (
-    <div className="space-y-3">
+    <StaggerList className="space-y-3">
       {categories.map((category) => {
         const open = openId === category.id
         const exercises = countExercises(category)
 
         return (
-          <section key={category.id}>
-            <h2>
-              <button
-                type="button"
-                onClick={() => setOpenId(open ? null : category.id)}
-                aria-expanded={open}
-                aria-controls={`category-${category.id}`}
-                className={`surface flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-left transition-colors ${
-                  open ? 'border-danger/40' : 'hover:bg-card-raised/90'
-                }`}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block text-lg font-bold tracking-tight text-primary">
-                    {category.name}
-                  </span>
-                  <span className="mt-0.5 block text-[13px] text-secondary">
-                    {category.subcategories.length} groups · {exercises}{' '}
-                    exercises
-                  </span>
-                </span>
-
-                <ChevronDownIcon
-                  className={`h-5 w-5 shrink-0 transition-transform duration-300 ${
-                    open ? 'rotate-180 text-danger' : 'text-faint'
+          <StaggerItem key={category.id}>
+            <section>
+              <h2>
+                <button
+                  type="button"
+                  onClick={() => setOpenId(open ? null : category.id)}
+                  aria-expanded={open}
+                  aria-controls={`category-${category.id}`}
+                  className={`surface flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-left transition-colors ${
+                    open ? 'border-danger/40' : 'hover:bg-card-raised/90'
                   }`}
-                />
-              </button>
-            </h2>
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-lg font-bold tracking-tight text-primary">
+                      {category.name}
+                    </span>
+                    <span className="mt-0.5 block text-[13px] text-secondary">
+                      {category.subcategories.length} groups · {exercises}{' '}
+                      exercises
+                    </span>
+                  </span>
 
-            {open && (
-              <div
-                id={`category-${category.id}`}
-                className="mt-3 space-y-3 pl-3"
-              >
-                {category.subcategories.map((subcategory) => (
-                  <SubcategoryCard
-                    key={subcategory.id}
-                    subcategory={subcategory}
+                  <ChevronDownIcon
+                    className={`h-5 w-5 shrink-0 transition-transform duration-300 ${
+                      open ? 'rotate-180 text-danger' : 'text-faint'
+                    }`}
                   />
-                ))}
-              </div>
-            )}
-          </section>
+                </button>
+              </h2>
+
+              {open && (
+                <div
+                  id={`category-${category.id}`}
+                  className="mt-3 space-y-3 pl-3"
+                >
+                  {category.subcategories.map((subcategory) => (
+                    <SubcategoryCard
+                      key={subcategory.id}
+                      subcategory={subcategory}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </StaggerItem>
         )
       })}
-    </div>
+    </StaggerList>
   )
 }
