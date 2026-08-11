@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function StartPage() {
   const dow = todayDayOfWeek()
-  const [{ day }, session] = await Promise.all([
+  const [{ program, day }, session] = await Promise.all([
     getProgramDay(dow),
     getSessionForDate(),
   ])
@@ -32,5 +32,5 @@ export default async function StartPage() {
     return <SessionSummary session={session} dayLabel={dayLabel} />
   }
 
-  return <StartWorkout day={day} dayLabel={dayLabel} />
+  return <StartWorkout program={program} todayDow={dow} dayLabel={dayLabel} />
 }

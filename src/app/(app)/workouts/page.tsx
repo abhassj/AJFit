@@ -14,9 +14,12 @@ export default async function WorkoutsPage() {
 
   return (
     <main className="px-4 pt-2">
-      <header className="px-1 pb-6 text-center">
-        <h1 className="text-[13px] font-bold tracking-[0.18em] text-primary uppercase">
-          Exercise Catalog
+      {/* Editorial masthead: left-aligned and typographic, unlike Programs'
+          tool header with its edit control. */}
+      <header className="px-1 pb-2">
+        <p className="label-caps">Reference</p>
+        <h1 className="mt-1.5 text-[30px] leading-none font-bold tracking-tight text-primary">
+          Catalog
         </h1>
         <p className="mt-2 text-[13px] text-secondary">
           {categories.length} categories · {totalGroups} groups ·{' '}

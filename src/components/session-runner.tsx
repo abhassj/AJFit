@@ -16,9 +16,11 @@ import {
   ChevronDownIcon,
   PauseIcon,
   PlayIcon,
+  RestIcon,
   SkipIcon,
 } from '@/components/icons'
 import { NumericEntry, type NumericField } from '@/components/numeric-keypad'
+import { RestTimer } from '@/components/rest-timer'
 import { ActionButton, Banner, TripleActionRow } from '@/components/ui'
 import {
   elapsedSeconds,
@@ -323,6 +325,15 @@ function ExercisePanel({
   const [comment, setComment] = useState(exercise.comment ?? '')
   const [showComment, setShowComment] = useState(!!exercise.comment)
 
+  /*
+   * Rest is offered after a set is logged, and only when the template actually
+   * defines a rest period. An exercise with rest_seconds unset simply never
+   * shows the option — that is the configured behaviour, not a missing feature.
+   */
+  const canRest = (exercise.rest_seconds ?? 0) > 0
+  const [restStartedAt, setRestStartedAt] = useState<number | null>(null)
+  const [offerRest, setOfferRest] = useState(false)
+
   const toNumber = (value: string) => {
     if (value.trim() === '') return null
     const n = Number(value)
@@ -346,6 +357,9 @@ function ExercisePanel({
       onRun(() => updateSet(id, r, w))
     } else {
       onRun(() => logSet(exercise.id, r, w))
+      // Only a freshly logged set earns a rest period; correcting an old one
+      // is bookkeeping, not work.
+      if (canRest) setOfferRest(true)
     }
     clear()
   }
@@ -374,9 +388,12 @@ function ExercisePanel({
         <h2 className="mt-1.5 text-xl leading-snug font-bold tracking-tight text-primary">
           {exercise.exercise_name}
         </h2>
-        {exercise.prescribed_reps && (
+        {(exercise.prescribed_reps || canRest) && (
           <p className="mt-1 text-sm text-secondary">
-            Prescribed: {exercise.prescribed_reps}
+            {exercise.prescribed_reps &&
+              `Prescribed: ${exercise.prescribed_reps}`}
+            {exercise.prescribed_reps && canRest && ' · '}
+            {canRest && `${exercise.rest_seconds}s rest`}
           </p>
         )}
 
@@ -412,14 +429,51 @@ function ExercisePanel({
         />
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
-        <ActionButton tone="primary" onClick={handleDone}>
-          {editingSetId ? 'Update Set' : 'Log Set'}
-        </ActionButton>
-        <ActionButton onClick={() => setShowComment((v) => !v)}>
-          Comment
-        </ActionButton>
-      </div>
+      {restStartedAt !== null ? (
+        <RestTimer
+          key={restStartedAt}
+          startedAt={restStartedAt}
+          seconds={exercise.rest_seconds ?? 0}
+          exerciseName={exercise.exercise_name}
+          // Skip returns to the current set without advancing anything.
+          onSkip={() => setRestStartedAt(null)}
+          // Next Set closes rest and puts the keypad straight back on reps.
+          onNextSet={() => {
+            setRestStartedAt(null)
+            setField('reps')
+          }}
+        />
+      ) : (
+        <>
+          {offerRest && canRest && (
+            <div className="mt-3">
+              <ActionButton
+                tone="danger"
+                className="w-full"
+                onClick={() => {
+                  setOfferRest(false)
+                  // Clock read here, in the handler — not during render.
+                  setRestStartedAt(Date.now())
+                }}
+              >
+                <span className="flex items-center gap-2">
+                  <RestIcon className="h-5 w-5" />
+                  Begin Rest · {exercise.rest_seconds}s
+                </span>
+              </ActionButton>
+            </div>
+          )}
+
+          <div className="mt-3 grid grid-cols-2 gap-2.5">
+            <ActionButton tone="primary" onClick={handleDone}>
+              {editingSetId ? 'Update Set' : 'Log Set'}
+            </ActionButton>
+            <ActionButton onClick={() => setShowComment((v) => !v)}>
+              Comment
+            </ActionButton>
+          </div>
+        </>
+      )}
 
       {showComment && (
         <div className="surface mt-3 rounded-2xl p-4">

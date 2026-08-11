@@ -5,21 +5,29 @@ import { useState, useTransition } from 'react'
 import { skipDay, startSession } from '@/app/(app)/start/actions'
 import { CheckIcon, PlayIcon, RestIcon, SkipIcon } from '@/components/icons'
 import { ActionButton, Banner } from '@/components/ui'
-import type { ProgramDay } from '@/lib/program-types'
+import { ProgramDayPicker } from '@/components/program-day-picker'
+import { DAY_LABELS, type DayOfWeek, type Program } from '@/lib/program-types'
 import { formatClockTime, formatDuration } from '@/lib/session-types'
 import type { WorkoutSession } from '@/lib/session-types'
 
 /** Pre-session screen: confirm and start, or explicitly skip the whole day. */
 export function StartWorkout({
-  day,
+  program,
+  todayDow,
   dayLabel,
 }: {
-  day: ProgramDay
+  program: Program
+  todayDow: DayOfWeek
   dayLabel: string
 }) {
   const [confirming, setConfirming] = useState(false)
+  const [selectedDow, setSelectedDow] = useState<DayOfWeek>(todayDow)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+
+  const day =
+    program.days.find((d) => d.day_of_week === selectedDow) ?? program.days[0]
+  const runningToday = selectedDow === todayDow
 
   function run(fn: () => Promise<{ ok: true } | { ok: false; error: string }>) {
     setError(null)
@@ -29,7 +37,9 @@ export function StartWorkout({
     })
   }
 
-  if (day.is_rest_day) {
+  // A rest day is only a dead end while it is the one selected; the picker
+  // below still lets another day be chosen.
+  if (day.is_rest_day && runningToday) {
     return (
       <main className="flex min-h-dvh flex-col items-center justify-center gap-5 px-8 text-center">
         <div className="surface flex h-16 w-16 items-center justify-center rounded-2xl">
@@ -42,6 +52,16 @@ export function StartWorkout({
           <p className="mx-auto max-w-xs text-sm leading-relaxed text-secondary">
             {dayLabel} is marked as rest in your program. Nothing to log today.
           </p>
+        </div>
+
+        <div className="w-full max-w-sm">
+          <ProgramDayPicker
+            program={program}
+            selected={selectedDow}
+            defaultDay={todayDow}
+            onSelect={setSelectedDow}
+            disabled={pending}
+          />
         </div>
       </main>
     )
@@ -56,7 +76,10 @@ export function StartWorkout({
         </h1>
         <p className="mt-1.5 text-sm text-secondary">
           {day.exercises.length} exercise
-          {day.exercises.length === 1 ? '' : 's'} scheduled
+          {day.exercises.length === 1 ? '' : 's'}
+          {runningToday
+            ? ' scheduled'
+            : ` from ${DAY_LABELS[selectedDow]}’s program`}
         </p>
       </header>
 
@@ -98,12 +121,20 @@ export function StartWorkout({
         </div>
       )}
 
+      <ProgramDayPicker
+        program={program}
+        selected={selectedDow}
+        defaultDay={todayDow}
+        onSelect={setSelectedDow}
+        disabled={pending}
+      />
+
       {/* Primary actions sit at the bottom, in the thumb zone. */}
-      <div className="sticky bottom-4 mt-5 space-y-2.5">
+      <div className="sticky bottom-4 mt-2 space-y-2.5">
         {confirming ? (
           <>
             <p className="surface rounded-xl px-4 py-3 text-center text-sm text-secondary">
-              Start logging {dayLabel}’s workout now?
+              Start logging {DAY_LABELS[selectedDow]}’s workout now?
             </p>
             <div className="grid grid-cols-2 gap-2.5">
               <ActionButton onClick={() => setConfirming(false)}>
@@ -112,7 +143,7 @@ export function StartWorkout({
               <ActionButton
                 tone="danger"
                 disabled={pending}
-                onClick={() => run(startSession)}
+                onClick={() => run(() => startSession(selectedDow))}
               >
                 {pending ? 'Starting…' : 'Confirm Start'}
               </ActionButton>

@@ -8,14 +8,39 @@ import { MonthCalendar, STATUS_STYLE } from '@/components/month-calendar'
 import { DAY_SHORT } from '@/lib/program-types'
 import type { HomeData, WeekDay } from '@/lib/home-types'
 
-export function HomeDashboard({ data }: { data: HomeData }) {
+export function HomeDashboard({
+  data,
+  motto,
+}: {
+  data: HomeData
+  motto: string | null
+}) {
+  const trimmedMotto = motto?.trim()
+
   return (
     <main className="px-4 pt-2">
       <header className="px-1 pb-5">
         <p className="label-caps">This Week</p>
-        <h1 className="mt-1.5 text-[26px] leading-tight font-bold tracking-tight text-primary">
-          Dashboard
-        </h1>
+        {/*
+         * The motto takes the headline slot when set — a user-authored callback
+         * to the tagline the original mockup carried as static art. With none
+         * set the heading simply reads "Dashboard"; nothing renders an empty
+         * box or placeholder copy pretending to be content.
+         */}
+        {trimmedMotto ? (
+          <>
+            <h1 className="mt-2 text-[30px] leading-[1.12] font-bold tracking-tight text-balance text-primary">
+              {trimmedMotto}
+            </h1>
+            <p className="mt-2 text-[13px] font-semibold tracking-[0.14em] text-faint uppercase">
+              Dashboard
+            </p>
+          </>
+        ) : (
+          <h1 className="mt-1.5 text-[26px] leading-tight font-bold tracking-tight text-primary">
+            Dashboard
+          </h1>
+        )}
       </header>
 
       <StaggerList className="space-y-3">

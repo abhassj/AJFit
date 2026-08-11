@@ -27,7 +27,8 @@ import { FadeIn } from '@/components/motion'
 import { NumericEntry, type NumericField } from '@/components/numeric-keypad'
 import { ActionButton, Banner, TripleActionRow } from '@/components/ui'
 import { formatLongDate } from '@/lib/home-types'
-import type { ProgramDay } from '@/lib/program-types'
+import { ProgramDayPicker } from '@/components/program-day-picker'
+import { DAY_LABELS, type DayOfWeek, type Program } from '@/lib/program-types'
 import {
   formatClockTime,
   formatDuration,
@@ -51,18 +52,26 @@ type Outcome = { ok: true } | { ok: false; error: string }
 export function DayLogger({
   date,
   session,
-  day,
+  program,
+  calendarDow,
   isFuture,
 }: {
   date: string
   session: WorkoutSession | null
-  day: ProgramDay
+  program: Program
+  calendarDow: DayOfWeek
   isFuture: boolean
 }) {
   const [error, setError] = useState<string | null>(null)
   const [confirmingRest, setConfirmingRest] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [selectedDow, setSelectedDow] = useState<DayOfWeek>(calendarDow)
   const [pending, startTransition] = useTransition()
+
+  // Which program day this backfill will follow. Defaults to the date's own
+  // weekday, but a missed session may well have been a different day's workout.
+  const day =
+    program.days.find((d) => d.day_of_week === selectedDow) ?? program.days[0]
 
   function run(fn: () => Promise<Outcome>) {
     setError(null)
@@ -138,8 +147,8 @@ export function DayLogger({
                 </h2>
                 <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
                   {day.exercises.length} exercise
-                  {day.exercises.length === 1 ? '' : 's'} scheduled for this
-                  weekday.
+                  {day.exercises.length === 1 ? '' : 's'} from{' '}
+                  {DAY_LABELS[selectedDow]}’s program.
                 </p>
               </div>
               <ul>
@@ -164,7 +173,18 @@ export function DayLogger({
               </ul>
             </section>
 
-            <div className="mt-5 space-y-2.5">
+            <ProgramDayPicker
+              program={program}
+              selected={selectedDow}
+              defaultDay={calendarDow}
+              onSelect={(d) => {
+                setSelectedDow(d)
+                setConfirmingRest(false)
+              }}
+              disabled={pending}
+            />
+
+            <div className="mt-2 space-y-2.5">
               {day.is_rest_day && !confirmingRest ? (
                 <>
                   <div className="surface flex items-start gap-3 rounded-xl px-4 py-3.5">
@@ -190,7 +210,7 @@ export function DayLogger({
                   tone="danger"
                   className="w-full"
                   disabled={pending}
-                  onClick={() => run(() => startBackfill(date))}
+                  onClick={() => run(() => startBackfill(date, selectedDow))}
                 >
                   {pending ? 'Creating…' : 'Log this workout'}
                 </ActionButton>

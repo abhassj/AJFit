@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 
 import { HomeDashboard } from '@/components/home-dashboard'
 import { getHomeData } from '@/lib/home'
+import { getProfile } from '@/lib/profile'
 import { createClient } from '@/lib/supabase/server'
 
 export const metadata = { title: 'Home · AJFit' }
@@ -19,7 +20,7 @@ export default async function HomePage() {
     redirect('/sign-in')
   }
 
-  const data = await getHomeData()
+  const [data, profile] = await Promise.all([getHomeData(), getProfile()])
 
-  return <HomeDashboard data={data} />
+  return <HomeDashboard data={data} motto={profile?.motto ?? null} />
 }

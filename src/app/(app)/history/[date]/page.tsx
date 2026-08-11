@@ -27,7 +27,7 @@ export default async function DayPage({ params }: PageProps) {
   if (Number.isNaN(parsed.getTime())) notFound()
 
   const dow = DAYS_OF_WEEK[(parsed.getDay() + 6) % 7]
-  const [session, { day }] = await Promise.all([
+  const [session, { program }] = await Promise.all([
     getSessionForDate(date),
     getProgramDay(dow),
   ])
@@ -36,7 +36,8 @@ export default async function DayPage({ params }: PageProps) {
     <DayLogger
       date={date}
       session={session}
-      day={day}
+      program={program}
+      calendarDow={dow}
       isFuture={date > localDateKey()}
     />
   )

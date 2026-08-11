@@ -63,3 +63,73 @@ The deep maroon tones sampled from the mockups (`#360D15`–`#3E0F16`) were part
 
 - Exact hex for `accent-danger` and `accent-success` should be finalized visually once real components exist, not derived purely from compressed mockup images.
 - Icon set for the bottom nav and exercise list rows not yet chosen — pick one icon library and use it consistently (don't mix styles).
+
+---
+
+## Addendum — post-launch update (v1.2)
+
+Added alongside the motto, rest-timer and flexible-day-execution work. This
+section supersedes anything above it where the two disagree.
+
+### Corrected token
+
+`text-secondary` is **`#8B9099`**, not `#6E6E6E`. The original value measured
+3.17:1 against `bg-card`, below WCAG AA for body text; `#8B9099` measures
+5.03:1. The old value survives as **`--color-faint`** for the decorative uses it
+genuinely suits — dividers, disabled glyphs, captions at 3:1.
+
+### Page personalities
+
+Programs and Workouts share the same tokens but must not read the same. They
+are different kinds of screen and their layouts say so:
+
+|           | Workouts                                  | Programs                                         |
+| --------- | ----------------------------------------- | ------------------------------------------------ |
+| Role      | Browsable reference                       | Builder / tool                                   |
+| Container | **No cards.** Hairline-divided index rows | `.surface` control rows with a day rail          |
+| Heading   | 26px category name, editorial masthead    | 17px day title behind a fixed-width weekday slot |
+| Grouping  | Accent rail (`border-l-2`) + whitespace   | Bordered rows, status chips                      |
+
+If a new page is a reference, follow Workouts. If it is a tool, follow
+Programs.
+
+### Nesting rule
+
+**Do not put a card inside a card.** Before this pass the catalog boxed a
+`.surface` article per subcategory and then boxed its exercise rows again
+inside it. Both containers are gone; hierarchy now comes from type size,
+weight, an accent rail and whitespace. Reach for typography before another
+border — it reads better and is cheaper to paint.
+
+### New patterns
+
+**Chip row.** Short related values (target muscles) render as
+`rounded-full border-hairline` pills rather than a bulleted list. Denser,
+scannable, and no vertical rhythm cost.
+
+**Day rail.** A fixed-width, bordered left column carrying the weekday
+abbreviation. It is what makes a Programs row read as a control rather than an
+article.
+
+**Countdown ring.** A single SVG `<circle>` whose `stroke-dashoffset` is
+animated. Never redraw an arc per frame in JS — animate the dash offset and let
+the compositor do it.
+
+**Motto headline.** The user's motto takes the Home headline slot at 30px bold
+when set. When unset the heading simply reads "Dashboard" — never an empty
+container or placeholder text posing as content.
+
+### Motion
+
+Micro-interactions use `whileTap={{ scale: 0.985–0.99 }}` on pressable rows,
+and expand/collapse animates `opacity` + `y` — never `height`, which forces
+layout. Everything routes through `MotionProvider` (`LazyMotion` + `m`
+components, `strict`), so the eager Framer bundle can never creep back in.
+All motion is disabled under `prefers-reduced-motion`.
+
+### Timers
+
+Any countdown or elapsed display must be **timestamp-based** — store the start
+instant and compute against `Date.now()`. Never decrement a counter on an
+interval: it drifts, and it stops entirely when the phone locks, which is
+precisely when a rest timer is running.

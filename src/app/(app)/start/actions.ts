@@ -4,7 +4,12 @@ import { revalidatePath } from 'next/cache'
 
 import { createClient } from '@/lib/supabase/server'
 import { getOrCreateProgram } from '@/lib/program'
-import { localDateKey, todayDayOfWeek } from '@/lib/program-types'
+import {
+  DAY_LABELS,
+  localDateKey,
+  todayDayOfWeek,
+  type DayOfWeek,
+} from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
 import { intervalToSeconds, secondsToInterval } from '@/lib/session-types'
 
@@ -29,8 +34,16 @@ function refresh() {
  * Begins today's session and materialises one session_exercise per templated
  * exercise, so per-exercise status and comments have a row to live on from the
  * first tap.
+ *
+ * `programDayOfWeek` lets the user run a day that is not today's actual
+ * weekday — training days slip, and the calendar weekday should not dictate
+ * which workout you are allowed to do. It defaults to today's weekday.
+ * The session still records the real calendar date; only the template it
+ * follows is chosen.
  */
-export async function startSession(): Promise<ActionResult> {
+export async function startSession(
+  programDayOfWeek?: DayOfWeek,
+): Promise<ActionResult> {
   try {
     const { supabase, user } = await requireUser()
     const date = localDateKey()
@@ -39,11 +52,16 @@ export async function startSession(): Promise<ActionResult> {
     if (existing) return fail('A session already exists for today.')
 
     const program = await getOrCreateProgram()
-    const day = program.days.find((d) => d.day_of_week === todayDayOfWeek())
-    if (!day) return fail('No program day for today.')
-    if (day.is_rest_day) return fail('Today is a rest day.')
+    const chosen = programDayOfWeek ?? todayDayOfWeek()
+    const day = program.days.find((d) => d.day_of_week === chosen)
+    if (!day) return fail('No program day for that selection.')
+    if (day.is_rest_day) {
+      return fail(`${DAY_LABELS[chosen]} is a rest day in your program.`)
+    }
     if (day.exercises.length === 0) {
-      return fail('Today has no exercises. Add some in the Program builder.')
+      return fail(
+        `${DAY_LABELS[chosen]} has no exercises. Add some in the Program builder.`,
+      )
     }
 
     const { data: session, error } = await supabase

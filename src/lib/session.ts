@@ -24,6 +24,7 @@ const SESSION_SELECT = `
     program_exercises (
       exercise_order,
       prescribed_reps,
+      rest_seconds,
       exercises ( name )
     ),
     sets ( id, set_number, reps_done, weight )
@@ -39,6 +40,7 @@ type RawSessionExercise = {
   program_exercises: {
     exercise_order: number
     prescribed_reps: string | null
+    rest_seconds: number | null
     exercises: { name: string } | null
   } | null
   sets: {
@@ -74,6 +76,7 @@ function shapeSession(row: {
         comment: se.comment,
         exercise_name: se.program_exercises?.exercises?.name ?? 'Exercise',
         prescribed_reps: se.program_exercises?.prescribed_reps ?? null,
+        rest_seconds: se.program_exercises?.rest_seconds ?? null,
         exercise_order: se.program_exercises?.exercise_order ?? 0,
         sets: [...(se.sets ?? [])].sort((a, b) => a.set_number - b.set_number),
       }))

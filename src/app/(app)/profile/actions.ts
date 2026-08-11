@@ -14,7 +14,7 @@ const fail = (error: string): ActionResult => ({ ok: false, error })
  */
 export async function saveProfileDetails(input: {
   display_name: string
-  bio: string
+  motto: string
 }): Promise<ActionResult> {
   const supabase = await createClient()
   const {
@@ -26,7 +26,7 @@ export async function saveProfileDetails(input: {
     {
       id: user.id,
       display_name: input.display_name.trim() || null,
-      bio: input.bio.trim() || null,
+      motto: input.motto.trim() || null,
     },
     { onConflict: 'id' },
   )

@@ -1,11 +1,14 @@
 'use client'
 
+import { m, useReducedMotion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
-import { saveProgram } from '@/app/(app)/program/actions'
+import { copyDay, saveProgram } from '@/app/(app)/program/actions'
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
+  CopyIcon,
   DumbbellIcon,
   PencilIcon,
   PlusIcon,
@@ -30,6 +33,8 @@ type Row = {
   subcategoryId: string
   exerciseId: string
   prescribedReps: string
+  /** Blank string means "no rest timer", which persists as null. */
+  restSeconds: string
   customFields: { key: string; value: string }[]
 }
 
@@ -41,6 +46,15 @@ type DayState = {
 
 let keyCounter = 0
 const nextKey = () => `row-${++keyCounter}`
+
+/** Blank or unparseable input means no rest timer, not zero. */
+function parseRestSeconds(value: string): number | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  const n = Number(trimmed)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.round(n)
+}
 
 function buildInitialState(
   program: Program,
@@ -77,6 +91,7 @@ function buildInitialState(
           subcategoryId: parents?.subcategoryId ?? '',
           exerciseId: exercise.exercise_id,
           prescribedReps: exercise.prescribed_reps ?? '',
+          restSeconds: exercise.rest_seconds?.toString() ?? '',
           customFields: Object.entries(exercise.custom_fields ?? {}).map(
             ([key, value]) => ({ key, value }),
           ),
@@ -102,6 +117,9 @@ function toDraft(state: Record<DayOfWeek, DayState>): DraftDay[] {
           id: row.id,
           exercise_id: row.exerciseId,
           prescribed_reps: row.prescribedReps,
+          // Blank stays null: an unset rest timer is a real choice, never a
+          // guessed default.
+          rest_seconds: parseRestSeconds(row.restSeconds),
           custom_fields: Object.fromEntries(
             row.customFields
               .filter((f) => f.key.trim())
@@ -127,6 +145,8 @@ export function ProgramBuilder({
     text: string
   } | null>(null)
   const [pending, startTransition] = useTransition()
+  const router = useRouter()
+  const reduced = useReducedMotion()
 
   const exercisesById = useMemo(() => {
     const map = new Map<string, string>()
@@ -164,6 +184,7 @@ export function ProgramBuilder({
           subcategoryId: '',
           exerciseId: '',
           prescribedReps: '',
+          restSeconds: '',
           customFields: [],
         },
       ],
@@ -180,6 +201,20 @@ export function ProgramBuilder({
     if (target < 0 || target >= rows.length) return
     ;[rows[index], rows[target]] = [rows[target], rows[index]]
     updateDay(dow, { rows })
+  }
+
+  /**
+   * A copy writes straight to the database, so the in-memory draft is stale
+   * afterwards. Reloading is the honest way to resync rather than trying to
+   * mirror the server's write back into local state.
+   */
+  function handleCopied(next: { tone: 'error' | 'success'; text: string }) {
+    setMessage(next)
+    if (next.tone === 'success') {
+      startTransition(() => {
+        router.refresh()
+      })
+    }
   }
 
   function handleSave() {
@@ -240,16 +275,33 @@ export function ProgramBuilder({
           return (
             <section key={dow}>
               <h2>
-                <button
+                {/*
+                 * Programs is a builder, so its rows read as controls: a solid
+                 * day rail down the left edge, a fixed-width slot for the
+                 * weekday, and state shown as a chip. Workouts, by contrast, is
+                 * an unboxed editorial index — the two pages should not look
+                 * like the same list with different words in it.
+                 */}
+                <m.button
                   type="button"
                   onClick={() => setOpenDay(open ? null : dow)}
                   aria-expanded={open}
                   aria-controls={`day-${dow}`}
-                  className={`surface flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-left transition-colors ${
-                    open ? 'border-danger/40' : ''
+                  whileTap={reduced ? undefined : { scale: 0.99 }}
+                  transition={{ duration: 0.12 }}
+                  className={`surface flex w-full items-center gap-3 overflow-hidden rounded-xl py-3.5 pr-4 text-left transition-colors ${
+                    open ? 'border-danger/45' : ''
                   }`}
                 >
-                  <span className="w-11 shrink-0 text-[13px] font-bold tracking-[0.1em] text-faint uppercase">
+                  <span
+                    className={`flex w-14 shrink-0 flex-col items-center gap-0.5 self-stretch border-r py-1 text-[12px] font-bold tracking-[0.1em] uppercase transition-colors ${
+                      open
+                        ? 'border-danger/40 text-danger'
+                        : day.isRestDay
+                          ? 'border-hairline text-faint'
+                          : 'border-hairline text-secondary'
+                    }`}
+                  >
                     {DAY_SHORT[dow]}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -275,7 +327,7 @@ export function ProgramBuilder({
                       open ? 'rotate-180 text-danger' : 'text-faint'
                     }`}
                   />
-                </button>
+                </m.button>
               </h2>
 
               {open && (
@@ -283,8 +335,10 @@ export function ProgramBuilder({
                   <DayPanel
                     dow={dow}
                     day={day}
+                    program={program}
                     catalog={catalog}
                     editing={editing}
+                    onCopied={handleCopied}
                     exercisesById={exercisesById}
                     onUpdateDay={(patch) => updateDay(dow, patch)}
                     onUpdateRow={(key, patch) => updateRow(dow, key, patch)}
@@ -318,8 +372,10 @@ export function ProgramBuilder({
 function DayPanel({
   dow,
   day,
+  program,
   catalog,
   editing,
+  onCopied,
   exercisesById,
   onUpdateDay,
   onUpdateRow,
@@ -329,8 +385,10 @@ function DayPanel({
 }: {
   dow: DayOfWeek
   day: DayState
+  program: Program
   catalog: CatalogCategory[]
   editing: boolean
+  onCopied: (message: { tone: 'error' | 'success'; text: string }) => void
   exercisesById: Map<string, string>
   onUpdateDay: (patch: Partial<DayState>) => void
   onUpdateRow: (key: string, patch: Partial<Row>) => void
@@ -371,9 +429,11 @@ function DayPanel({
                     <span className="block text-[15px] text-primary">
                       {exercisesById.get(row.exerciseId) ?? 'Unknown exercise'}
                     </span>
-                    {row.prescribedReps && (
+                    {(row.prescribedReps || row.restSeconds) && (
                       <span className="mt-0.5 block text-[13px] text-secondary">
                         {row.prescribedReps}
+                        {row.prescribedReps && row.restSeconds && ' · '}
+                        {row.restSeconds && `${row.restSeconds}s rest`}
                       </span>
                     )}
                   </span>
@@ -387,6 +447,8 @@ function DayPanel({
 
   return (
     <article className="surface space-y-4 rounded-2xl p-5">
+      <CopyFromDay dow={dow} program={program} onCopied={onCopied} />
+
       <TextField
         label="Day title"
         value={day.title}
@@ -524,12 +586,21 @@ function ExerciseRow({
         onChange={(exerciseId) => onChange({ exerciseId })}
       />
 
-      <TextField
-        label="Prescribed reps"
-        value={row.prescribedReps}
-        onChange={(prescribedReps) => onChange({ prescribedReps })}
-        placeholder="e.g. 3x6-10"
-      />
+      <div className="grid grid-cols-2 gap-3">
+        <TextField
+          label="Prescribed reps"
+          value={row.prescribedReps}
+          onChange={(prescribedReps) => onChange({ prescribedReps })}
+          placeholder="e.g. 3x6-10"
+        />
+        <TextField
+          label="Rest timer (sec)"
+          value={row.restSeconds}
+          inputMode="numeric"
+          onChange={(restSeconds) => onChange({ restSeconds })}
+          placeholder="Optional"
+        />
+      </div>
 
       <CustomFields
         fields={row.customFields}
@@ -619,6 +690,107 @@ function CustomFields({
         <PlusIcon className="h-3.5 w-3.5" />
         Add another
       </button>
+    </div>
+  )
+}
+
+/**
+ * "Copy from another day" — replaces this day wholesale with another day's
+ * exercises, title and rest-day status.
+ *
+ * Only non-rest days that actually have exercises are offered as sources;
+ * copying an empty day would silently wipe the target for no gain. The
+ * confirmation states plainly that this replaces what is already there.
+ */
+function CopyFromDay({
+  dow,
+  program,
+  onCopied,
+}: {
+  dow: DayOfWeek
+  program: Program
+  onCopied: (message: { tone: 'error' | 'success'; text: string }) => void
+}) {
+  const [source, setSource] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [pending, startTransition] = useTransition()
+
+  const sources = program.days.filter(
+    (d) => d.day_of_week !== dow && !d.is_rest_day && d.exercises.length > 0,
+  )
+
+  if (sources.length === 0) return null
+
+  const chosen = sources.find((d) => d.day_of_week === source)
+
+  return (
+    <div className="rounded-xl border border-hairline bg-base/40 p-3.5">
+      <div className="flex items-center gap-2">
+        <CopyIcon className="h-3.5 w-3.5 text-faint" />
+        <span className="label-caps">Copy from another day</span>
+      </div>
+
+      {confirming && chosen ? (
+        <div className="mt-3 space-y-2.5">
+          <p className="text-[13px] leading-relaxed text-secondary">
+            This replaces {DAY_LABELS[dow]}&rsquo;s exercises, title and
+            rest-day setting with {DAY_LABELS[chosen.day_of_week]}&rsquo;s (
+            {chosen.exercises.length} exercise
+            {chosen.exercises.length === 1 ? '' : 's'}). It cannot be undone.
+          </p>
+          <div className="grid grid-cols-2 gap-2.5">
+            <ActionButton onClick={() => setConfirming(false)}>
+              Cancel
+            </ActionButton>
+            <ActionButton
+              tone="danger"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const result = await copyDay(chosen.day_of_week, dow)
+                  setConfirming(false)
+                  setSource('')
+                  onCopied(
+                    result.ok
+                      ? {
+                          tone: 'success',
+                          text: `Copied ${DAY_LABELS[chosen.day_of_week]} into ${DAY_LABELS[dow]}.`,
+                        }
+                      : { tone: 'error', text: result.error },
+                  )
+                })
+              }
+            >
+              {pending ? 'Copying…' : 'Replace'}
+            </ActionButton>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2.5 flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <select
+              value={source}
+              aria-label={`Copy another day into ${DAY_LABELS[dow]}`}
+              onChange={(e) => setSource(e.target.value)}
+              className="min-h-[44px] w-full rounded-lg border border-hairline bg-card-raised px-3 text-[14px] text-primary"
+            >
+              <option value="">Select a day…</option>
+              {sources.map((d) => (
+                <option key={d.day_of_week} value={d.day_of_week}>
+                  {DAY_LABELS[d.day_of_week]} ({d.exercises.length})
+                </option>
+              ))}
+            </select>
+          </div>
+          <ActionButton
+            disabled={!chosen}
+            className="shrink-0 px-4"
+            onClick={() => setConfirming(true)}
+          >
+            Copy
+          </ActionButton>
+        </div>
+      )}
     </div>
   )
 }

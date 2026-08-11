@@ -16,6 +16,7 @@ type ProgramExerciseRow = {
   exercise_id: string
   prescribed_reps: string | null
   exercise_order: number
+  rest_seconds: number | null
   custom_fields: Record<string, string> | null
   exercises: {
     name: string
@@ -37,6 +38,7 @@ function shapeExercise(row: ProgramExerciseRow): ProgramExercise {
     exercise_id: row.exercise_id,
     prescribed_reps: row.prescribed_reps,
     exercise_order: row.exercise_order,
+    rest_seconds: row.rest_seconds,
     custom_fields: row.custom_fields ?? {},
     exercise_name: row.exercises?.name ?? 'Unknown exercise',
     subcategory_name: row.exercises?.subcategories?.name ?? '',
@@ -57,6 +59,7 @@ const PROGRAM_SELECT = `
       exercise_id,
       prescribed_reps,
       exercise_order,
+      rest_seconds,
       custom_fields,
       exercises (
         name,

@@ -3,7 +3,12 @@
 import { revalidatePath } from 'next/cache'
 
 import { getOrCreateProgram } from '@/lib/program'
-import { DAYS_OF_WEEK, localDateKey } from '@/lib/program-types'
+import {
+  DAY_LABELS,
+  DAYS_OF_WEEK,
+  localDateKey,
+  type DayOfWeek,
+} from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
 import { createClient } from '@/lib/supabase/server'
 import { secondsToInterval } from '@/lib/session-types'
@@ -29,7 +34,10 @@ function refresh(date: string) {
  * the "one living template, no versioning" decision (PRD §8.3) — editing the
  * program later changes what a backfill for an old date offers.
  */
-export async function startBackfill(date: string): Promise<ActionResult> {
+export async function startBackfill(
+  date: string,
+  programDayOfWeek?: DayOfWeek,
+): Promise<ActionResult> {
   if (!DATE_KEY.test(date)) return fail('Invalid date.')
   if (date > localDateKey()) return fail('That date is in the future.')
 
@@ -45,13 +53,17 @@ export async function startBackfill(date: string): Promise<ActionResult> {
 
     const program = await getOrCreateProgram()
     const [y, m, d] = date.split('-').map(Number)
-    const dow = DAYS_OF_WEEK[(new Date(y, m - 1, d).getDay() + 6) % 7]
+    const calendarDow = DAYS_OF_WEEK[(new Date(y, m - 1, d).getDay() + 6) % 7]
+    // Same flexibility as starting a live session: someone writing up a missed
+    // day should be able to record the workout they actually did, not whatever
+    // the calendar weekday happens to prescribe.
+    const dow = programDayOfWeek ?? calendarDow
     const day = program.days.find((x) => x.day_of_week === dow)
 
-    if (!day) return fail('No program day for that date.')
+    if (!day) return fail('No program day for that selection.')
     if (day.exercises.length === 0) {
       return fail(
-        'That weekday has no exercises in your program. Add some first.',
+        `${DAY_LABELS[dow]} has no exercises in your program. Add some first.`,
       )
     }
 

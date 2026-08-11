@@ -22,6 +22,8 @@ export type SessionExercise = {
   /** From the template, for display. */
   exercise_name: string
   prescribed_reps: string | null
+  /** From the template. Null means no rest timer is offered. */
+  rest_seconds: number | null
   exercise_order: number
   sets: LoggedSet[]
 }

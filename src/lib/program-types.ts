@@ -41,6 +41,8 @@ export type ProgramExercise = {
   exercise_id: string
   prescribed_reps: string | null
   exercise_order: number
+  /** Null means no rest timer is offered for this exercise. */
+  rest_seconds: number | null
   custom_fields: Record<string, string>
   /** Denormalised for display; resolved from the catalog. */
   exercise_name: string
@@ -71,6 +73,8 @@ export type DraftExercise = {
   id?: string
   exercise_id: string
   prescribed_reps: string
+  /** Null means the user left the rest timer blank, which is valid. */
+  rest_seconds: number | null
   custom_fields: Record<string, string>
 }
 

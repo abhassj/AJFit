@@ -1,12 +1,14 @@
 import 'server-only'
 
+import { cache } from 'react'
+
 import { createClient } from '@/lib/supabase/server'
 
 export type Profile = {
   id: string
   display_name: string | null
   avatar_url: string | null
-  bio: string | null
+  motto: string | null
   goal_bodyweight: number | null
 }
 
@@ -20,8 +22,12 @@ export type ProfilePageData = {
  * The user's profile. Nothing creates a profiles row at signup, so a missing
  * row is a normal state and is returned as an empty profile rather than an
  * error — the Profile page upserts on first save.
+ *
+ * Memoised per request: the app shell reads it for the avatar and Home reads it
+ * again for the motto, and the Supabase client runs with cache: 'no-store', so
+ * without this the same row would be fetched twice on every Home render.
  */
-export async function getProfile(): Promise<Profile | null> {
+export const getProfile = cache(async (): Promise<Profile | null> => {
   const supabase = await createClient()
 
   const {
@@ -31,7 +37,7 @@ export async function getProfile(): Promise<Profile | null> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, display_name, avatar_url, bio, goal_bodyweight')
+    .select('id, display_name, avatar_url, motto, goal_bodyweight')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -42,11 +48,11 @@ export async function getProfile(): Promise<Profile | null> {
       id: user.id,
       display_name: null,
       avatar_url: null,
-      bio: null,
+      motto: null,
       goal_bodyweight: null,
     }
   )
-}
+})
 
 /** Everything the Profile page renders. */
 export async function getProfilePageData(): Promise<ProfilePageData> {

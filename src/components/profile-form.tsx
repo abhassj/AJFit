@@ -17,7 +17,7 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
   const { profile, email, bodyweight } = data
 
   const [displayName, setDisplayName] = useState(profile.display_name ?? '')
-  const [bio, setBio] = useState(profile.bio ?? '')
+  const [motto, setMotto] = useState(profile.motto ?? '')
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url)
   const [weight, setWeight] = useState('')
   const [goal, setGoal] = useState(profile.goal_bodyweight?.toString() ?? '')
@@ -166,14 +166,19 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
           </label>
 
           <label className="block">
-            <span className="label-caps">Details</span>
-            <textarea
-              value={bio}
-              rows={3}
-              placeholder="Training goals, injuries to work around, anything worth remembering."
-              onChange={(e) => setBio(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-hairline bg-card-raised px-3 py-2.5 text-[15px] text-primary placeholder:text-faint"
+            <span className="label-caps">Motto</span>
+            <input
+              type="text"
+              value={motto}
+              maxLength={80}
+              placeholder="e.g. Be brave with your life"
+              onChange={(e) => setMotto(e.target.value)}
+              className="mt-1.5 min-h-[46px] w-full rounded-xl border border-hairline bg-card-raised px-3 text-[15px] text-primary placeholder:text-faint"
             />
+            <span className="mt-1.5 block text-[12px] text-faint">
+              A short line that shows on your Home screen. {80 - motto.length}{' '}
+              characters left.
+            </span>
           </label>
 
           <ActionButton
@@ -182,7 +187,7 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
             disabled={busy}
             onClick={() =>
               run(
-                () => saveProfileDetails({ display_name: displayName, bio }),
+                () => saveProfileDetails({ display_name: displayName, motto }),
                 'Profile saved.',
               )
             }
