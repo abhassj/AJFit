@@ -44,7 +44,7 @@ function SubcategorySection({
   const muscles = splitTargetMuscles(subcategory.target_muscle)
 
   return (
-    <article className="border-l-2 border-danger/40 pl-4">
+    <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-5 backdrop-blur-xl shadow-2xl">
       <h3 className="text-[19px] leading-snug font-bold tracking-tight text-primary">
         {subcategory.name}
       </h3>
@@ -82,7 +82,7 @@ function SubcategorySection({
 
       <ul className="mt-1">
         {subcategory.exercises.map((exercise) => (
-          <li key={exercise.id} className="border-b border-hairline/50">
+          <li key={exercise.id} className="border-t border-white/10 first:border-t-0">
             <Link
               href={`/workouts/${exercise.id}`}
               className="group flex items-center gap-3 py-3 transition-colors active:opacity-70"

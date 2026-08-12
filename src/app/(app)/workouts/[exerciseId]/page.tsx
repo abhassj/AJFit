@@ -53,8 +53,8 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
         </h1>
       </header>
 
-      <div className="space-y-6">
-        <section className="py-2">
+      <div className="relative space-y-6 overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-6 backdrop-blur-xl shadow-2xl">
+        <section className="py-0">
           <div className="flex items-center gap-2">
             <TargetIcon className="h-3.5 w-3.5 text-faint" />
             <h2 className="label-caps">Target Muscles</h2>
@@ -91,7 +91,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             </p>
             <ul>
               {subcategory.siblings.map((sibling) => (
-                <li key={sibling.id} className="border-t border-hairline/60 first:border-t-0">
+                <li key={sibling.id} className="border-t border-white/10 first:border-t-0">
                   <Link
                     href={`/workouts/${sibling.id}`}
                     className="group flex items-center gap-3.5 py-3.5 transition-colors"
