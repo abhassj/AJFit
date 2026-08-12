@@ -429,21 +429,25 @@ function ExercisePanel({
         />
       </div>
 
-      {restStartedAt !== null ? (
-        <RestTimer
-          key={restStartedAt}
-          startedAt={restStartedAt}
-          seconds={exercise.rest_seconds ?? 0}
-          exerciseName={exercise.exercise_name}
-          // Skip returns to the current set without advancing anything.
-          onSkip={() => setRestStartedAt(null)}
-          // Next Set closes rest and puts the keypad straight back on reps.
-          onNextSet={() => {
-            setRestStartedAt(null)
-            setField('reps')
-          }}
-        />
-      ) : (
+      <AnimatePresence>
+        {restStartedAt !== null && (
+          <RestTimer
+            key={restStartedAt}
+            startedAt={restStartedAt}
+            seconds={exercise.rest_seconds ?? 0}
+            exerciseName={exercise.exercise_name}
+            // Skip returns to the current set without advancing anything.
+            onSkip={() => setRestStartedAt(null)}
+            // Next Set closes rest and puts the keypad straight back on reps.
+            onNextSet={() => {
+              setRestStartedAt(null)
+              setField('reps')
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {restStartedAt === null && (
         <>
           {offerRest && canRest && (
             <div className="mt-3">
