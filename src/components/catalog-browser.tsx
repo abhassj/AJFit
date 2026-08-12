@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { AnimatePresence, m, useReducedMotion } from 'framer-motion'
 import { useState } from 'react'
 
@@ -14,6 +15,15 @@ import {
 
 function countExercises(category: CatalogCategory) {
   return category.subcategories.reduce((n, s) => n + s.exercises.length, 0)
+}
+
+const CATEGORY_IMAGES: Record<string, string> = {
+  'Chest': '/category_chest.png',
+  'Back': '/category_back.png',
+  'Shoulders': '/category_shoulders.png',
+  'Legs': '/category_legs.png',
+  'Arms': '/category_arms.png',
+  'Abs & Core': '/category_abs.png',
 }
 
 /**
@@ -46,7 +56,7 @@ function SubcategorySection({
           {muscles.map((muscle) => (
             <span
               key={muscle}
-              className="rounded-full border border-hairline bg-card/60 px-2.5 py-1 text-[12px] text-secondary"
+              className="rounded-full border border-danger/20 bg-danger/10 px-2.5 py-1 text-[12px] text-primary/90"
             >
               {muscle}
             </span>
@@ -99,7 +109,7 @@ export function CatalogBrowser({
   const reduced = useReducedMotion()
 
   return (
-    <StaggerList className="divide-y divide-hairline/70">
+    <StaggerList className="space-y-4">
       {categories.map((category) => {
         const open = openId === category.id
         const exercises = countExercises(category)
@@ -108,11 +118,6 @@ export function CatalogBrowser({
           <StaggerItem key={category.id}>
             <section>
               <h2>
-                {/*
-                 * An index row, not a card: the name carries the weight and a
-                 * hairline separates entries. whileTap gives the press feedback
-                 * the card's hover state used to imply.
-                 */}
                 <m.button
                   type="button"
                   onClick={() => setOpenId(open ? null : category.id)}
@@ -120,12 +125,27 @@ export function CatalogBrowser({
                   aria-controls={`category-${category.id}`}
                   whileTap={reduced ? undefined : { scale: 0.985 }}
                   transition={{ duration: 0.12 }}
-                  className="flex w-full items-baseline gap-4 py-5 text-left"
+                  className={`relative flex w-full items-center justify-between overflow-hidden rounded-2xl border bg-[#1a1d24] text-left transition-colors ${
+                    open ? 'border-danger/40 ring-1 ring-danger/20' : 'border-white/5 hover:border-white/10'
+                  }`}
                 >
-                  <span className="min-w-0 flex-1">
+                  <div className="absolute inset-y-0 right-0 w-3/5 opacity-80">
+                    <div className="absolute inset-0 z-10 bg-gradient-to-r from-[#1a1d24] via-[#1a1d24]/50 to-transparent" />
+                    {CATEGORY_IMAGES[category.name] && (
+                      <Image
+                        src={CATEGORY_IMAGES[category.name]}
+                        alt=""
+                        fill
+                        className="object-cover object-right"
+                        sizes="(max-width: 768px) 60vw, 300px"
+                      />
+                    )}
+                  </div>
+
+                  <span className="relative z-20 min-w-0 flex-1 p-5">
                     <span
-                      className={`block text-[26px] leading-none font-bold tracking-tight transition-colors ${
-                        open ? 'text-danger' : 'text-primary'
+                      className={`block text-[22px] uppercase leading-none font-black tracking-widest transition-colors ${
+                        open ? 'text-danger drop-shadow-md' : 'text-primary drop-shadow-sm'
                       }`}
                     >
                       {category.name}
@@ -137,7 +157,7 @@ export function CatalogBrowser({
                   </span>
 
                   <ChevronRightIcon
-                    className={`h-5 w-5 shrink-0 transition-transform duration-300 ${
+                    className={`relative z-20 mr-5 h-5 w-5 shrink-0 transition-transform duration-300 ${
                       open ? 'rotate-90 text-danger' : 'text-faint'
                     }`}
                   />
@@ -152,7 +172,7 @@ export function CatalogBrowser({
                     animate={{ opacity: 1, y: 0 }}
                     exit={reduced ? undefined : { opacity: 0, y: -6 }}
                     transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                    className="space-y-7 pb-6"
+                    className="mt-4 space-y-7 px-2 pb-6"
                   >
                     {category.subcategories.map((subcategory) => (
                       <SubcategorySection

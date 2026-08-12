@@ -53,13 +53,13 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
         </h1>
       </header>
 
-      <div className="space-y-3">
-        <section className="surface rounded-2xl p-5">
+      <div className="space-y-6">
+        <section className="py-2">
           <div className="flex items-center gap-2">
             <TargetIcon className="h-3.5 w-3.5 text-faint" />
             <h2 className="label-caps">Target Muscles</h2>
           </div>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-4 space-y-2.5">
             {muscles.map((muscle) => (
               <li
                 key={muscle}
@@ -72,7 +72,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
           </ul>
         </section>
 
-        <section className="surface rounded-2xl p-5">
+        <section className="py-2">
           <h2 className="label-caps">How to Perform</h2>
           <p className="mt-3 text-[15px] leading-relaxed text-primary/85">
             {subcategory.how_to_perform}
@@ -80,21 +80,21 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
         </section>
 
         {subcategory.siblings.length > 0 && (
-          <section className="surface overflow-hidden rounded-2xl">
-            <div className="flex items-center gap-2 px-5 pt-5 pb-2.5">
+          <section className="py-2">
+            <div className="flex items-center gap-2 pb-2.5">
               <SwapIcon className="h-3.5 w-3.5 text-faint" />
               <h2 className="label-caps">Swap For</h2>
             </div>
-            <p className="px-5 pb-4 text-[13px] leading-relaxed text-faint">
+            <p className="pb-4 text-[13px] leading-relaxed text-faint">
               Same pattern, same technique — these are direct substitutes for{' '}
               {exercise.name}.
             </p>
             <ul>
               {subcategory.siblings.map((sibling) => (
-                <li key={sibling.id} className="border-t border-hairline/60">
+                <li key={sibling.id} className="border-t border-hairline/60 first:border-t-0">
                   <Link
                     href={`/workouts/${sibling.id}`}
-                    className="group flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-card-raised"
+                    className="group flex items-center gap-3.5 py-3.5 transition-colors"
                   >
                     <DumbbellIcon className="h-5 w-5 shrink-0 text-faint transition-colors group-hover:text-danger" />
                     <span className="flex-1 text-[15px] text-primary">
