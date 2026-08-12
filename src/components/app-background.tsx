@@ -47,11 +47,11 @@ const SETTINGS: Record<
 > = {
   // Sign-in, Home, Profile — room to breathe, so the figure is a real presence.
   feature: {
-    opacity: 0.34,
-    heightVh: 82,
-    offset: '-16%',
-    scale: '150%',
-    mask: 'linear-gradient(to bottom, rgba(0,0,0,0.95) 0%, rgba(0,0,0,1) 22%, rgba(0,0,0,0.5) 55%, rgba(0,0,0,0) 80%)',
+    opacity: 0.22,
+    heightVh: 90,
+    offset: '12%',
+    scale: '115%',
+    mask: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.9) 35%, rgba(0,0,0,0.3) 75%, rgba(0,0,0,0) 95%)',
   },
   // Catalog, builder, session logger — pushed high and faded early so it lives
   // in the margins above and behind the cards rather than under them.
@@ -83,6 +83,8 @@ export function AppBackground() {
         }}
       />
 
+      {/*
+        The background image has been temporarily removed per user request.
       <div
         className="absolute inset-x-0 top-0 overflow-hidden transition-all duration-500"
         style={{
@@ -102,6 +104,7 @@ export function AppBackground() {
           style={{ transform: `scale(${s.scale}) translateY(${s.offset})` }}
         />
       </div>
+      */}
 
       {/* Vignette — settles the edges back toward the base colour. */}
       <div
