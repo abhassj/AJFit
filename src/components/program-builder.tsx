@@ -4,7 +4,7 @@ import { m, useReducedMotion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
-import { copyDay, saveProgram } from '@/app/(app)/program/actions'
+import { saveProgram } from '@/app/(app)/program/actions'
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -203,18 +203,22 @@ export function ProgramBuilder({
     updateDay(dow, { rows })
   }
 
-  /**
-   * A copy writes straight to the database, so the in-memory draft is stale
-   * afterwards. Reloading is the honest way to resync rather than trying to
-   * mirror the server's write back into local state.
-   */
-  function handleCopied(next: { tone: 'error' | 'success'; text: string }) {
-    setMessage(next)
-    if (next.tone === 'success') {
-      startTransition(() => {
-        router.refresh()
-      })
-    }
+  function handleCopyFrom(sourceDow: DayOfWeek, targetDow: DayOfWeek) {
+    setState((prev) => ({
+      ...prev,
+      [targetDow]: {
+        ...prev[sourceDow],
+        rows: prev[sourceDow].rows.map((r) => ({
+          ...r,
+          key: nextKey(),
+          id: undefined, // newly copied rows won't have the old DB ids
+        })),
+      },
+    }))
+    setMessage({
+      tone: 'success',
+      text: `Copied ${DAY_LABELS[sourceDow]} into ${DAY_LABELS[targetDow]}. Don't forget to save.`,
+    })
   }
 
   function handleSave() {
@@ -235,8 +239,8 @@ export function ProgramBuilder({
       <header className="flex items-start justify-between gap-3 px-1 pb-5">
         <div>
           <p className="label-caps">Weekly Template</p>
-          <h1 className="mt-1.5 text-[26px] leading-tight font-bold tracking-tight text-primary">
-            {program.name}
+          <h1 className="mt-1.5 text-[28px] leading-tight font-black tracking-tight text-primary drop-shadow-sm">
+            My Workout Split
           </h1>
         </div>
 
@@ -248,8 +252,10 @@ export function ProgramBuilder({
           }}
           aria-label={editing ? 'Leave edit mode' : 'Edit program'}
           aria-pressed={editing}
-          className={`surface flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-colors ${
-            editing ? 'border-danger/50 text-danger' : 'text-secondary'
+          className={`relative overflow-hidden flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-300 backdrop-blur-xl ${
+            editing
+              ? 'bg-danger/20 border border-danger/40 text-danger shadow-lg'
+              : 'bg-white/[0.04] border border-white/5 text-primary shadow-lg hover:bg-white/[0.08] hover:border-white/15'
           }`}
         >
           {editing ? (
@@ -289,17 +295,19 @@ export function ProgramBuilder({
                   aria-controls={`day-${dow}`}
                   whileTap={reduced ? undefined : { scale: 0.99 }}
                   transition={{ duration: 0.12 }}
-                  className={`surface flex w-full items-center gap-3 overflow-hidden rounded-xl py-3.5 pr-4 text-left transition-colors ${
-                    open ? 'border-danger/45' : ''
+                  className={`relative overflow-hidden flex w-full items-center gap-3 rounded-2xl py-3.5 pr-4 text-left transition-all duration-300 backdrop-blur-xl ${
+                    open
+                      ? 'bg-white/[0.08] border border-white/20 shadow-2xl'
+                      : 'bg-white/[0.03] border border-white/5 shadow-lg hover:bg-white/[0.06] hover:border-white/10'
                   }`}
                 >
                   <span
                     className={`flex w-14 shrink-0 flex-col items-center gap-0.5 self-stretch border-r py-1 text-[12px] font-bold tracking-[0.1em] uppercase transition-colors ${
                       open
-                        ? 'border-danger/40 text-danger'
+                        ? 'border-white/20 text-danger'
                         : day.isRestDay
-                          ? 'border-hairline text-faint'
-                          : 'border-hairline text-secondary'
+                          ? 'border-white/5 text-faint'
+                          : 'border-white/10 text-primary/80'
                     }`}
                   >
                     {DAY_SHORT[dow]}
@@ -318,7 +326,7 @@ export function ProgramBuilder({
                     </span>
                   </span>
                   {day.isRestDay && (
-                    <span className="shrink-0 rounded-full border border-hairline px-2.5 py-1 text-[10px] font-bold tracking-[0.1em] text-faint uppercase">
+                    <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold tracking-[0.1em] text-faint uppercase">
                       Rest
                     </span>
                   )}
@@ -335,10 +343,10 @@ export function ProgramBuilder({
                   <DayPanel
                     dow={dow}
                     day={day}
-                    program={program}
+                    state={state}
                     catalog={catalog}
                     editing={editing}
-                    onCopied={handleCopied}
+                    onCopyFrom={(source) => handleCopyFrom(source, dow)}
                     exercisesById={exercisesById}
                     onUpdateDay={(patch) => updateDay(dow, patch)}
                     onUpdateRow={(key, patch) => updateRow(dow, key, patch)}
@@ -372,10 +380,10 @@ export function ProgramBuilder({
 function DayPanel({
   dow,
   day,
-  program,
+  state,
   catalog,
   editing,
-  onCopied,
+  onCopyFrom,
   exercisesById,
   onUpdateDay,
   onUpdateRow,
@@ -385,10 +393,10 @@ function DayPanel({
 }: {
   dow: DayOfWeek
   day: DayState
-  program: Program
+  state: Record<DayOfWeek, DayState>
   catalog: CatalogCategory[]
   editing: boolean
-  onCopied: (message: { tone: 'error' | 'success'; text: string }) => void
+  onCopyFrom: (sourceDow: DayOfWeek) => void
   exercisesById: Map<string, string>
   onUpdateDay: (patch: Partial<DayState>) => void
   onUpdateRow: (key: string, patch: Partial<Row>) => void
@@ -398,7 +406,7 @@ function DayPanel({
 }) {
   if (!editing) {
     return (
-      <article className="surface overflow-hidden rounded-2xl">
+      <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl shadow-2xl">
         {day.isRestDay ? (
           <div className="px-5 py-8 text-center">
             <p className="label-caps">Rest Day</p>
@@ -419,7 +427,7 @@ function DayPanel({
               .map((row, index) => (
                 <li
                   key={row.key}
-                  className="flex items-center gap-3.5 border-t border-hairline/60 px-5 py-3.5 first:border-t-0"
+                  className="flex items-center gap-3.5 border-t border-white/10 px-5 py-3.5 first:border-t-0"
                 >
                   <span className="w-5 shrink-0 text-[13px] font-semibold text-faint tabular-nums">
                     {index + 1}
@@ -446,8 +454,8 @@ function DayPanel({
   }
 
   return (
-    <article className="surface space-y-4 rounded-2xl p-5">
-      <CopyFromDay dow={dow} program={program} onCopied={onCopied} />
+    <article className="relative space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl shadow-2xl">
+      <CopyFromDay dow={dow} state={state} onCopyFrom={onCopyFrom} />
 
       <TextField
         label="Day title"
@@ -522,7 +530,7 @@ function ExerciseRow({
   )
 
   return (
-    <div className="space-y-3 rounded-xl border border-hairline bg-base/40 p-3.5">
+    <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-3.5 backdrop-blur-md">
       <div className="flex items-center justify-between">
         <span className="label-caps">Exercise {index + 1}</span>
         <div className="flex items-center gap-1">
@@ -694,37 +702,28 @@ function CustomFields({
   )
 }
 
-/**
- * "Copy from another day" — replaces this day wholesale with another day's
- * exercises, title and rest-day status.
- *
- * Only non-rest days that actually have exercises are offered as sources;
- * copying an empty day would silently wipe the target for no gain. The
- * confirmation states plainly that this replaces what is already there.
- */
 function CopyFromDay({
   dow,
-  program,
-  onCopied,
+  state,
+  onCopyFrom,
 }: {
   dow: DayOfWeek
-  program: Program
-  onCopied: (message: { tone: 'error' | 'success'; text: string }) => void
+  state: Record<DayOfWeek, DayState>
+  onCopyFrom: (sourceDow: DayOfWeek) => void
 }) {
-  const [source, setSource] = useState('')
+  const [source, setSource] = useState<DayOfWeek | ''>('')
   const [confirming, setConfirming] = useState(false)
-  const [pending, startTransition] = useTransition()
 
-  const sources = program.days.filter(
-    (d) => d.day_of_week !== dow && !d.is_rest_day && d.exercises.length > 0,
+  const sources = DAYS_OF_WEEK.filter(
+    (d) => d !== dow && !state[d].isRestDay && state[d].rows.filter((r) => r.exerciseId).length > 0
   )
 
   if (sources.length === 0) return null
 
-  const chosen = sources.find((d) => d.day_of_week === source)
+  const chosen = source ? state[source as DayOfWeek] : null
 
   return (
-    <div className="rounded-xl border border-hairline bg-base/40 p-3.5">
+    <div className="rounded-xl border border-white/10 bg-black/20 p-3.5 backdrop-blur-md">
       <div className="flex items-center gap-2">
         <CopyIcon className="h-3.5 w-3.5 text-faint" />
         <span className="label-caps">Copy from another day</span>
@@ -734,9 +733,9 @@ function CopyFromDay({
         <div className="mt-3 space-y-2.5">
           <p className="text-[13px] leading-relaxed text-secondary">
             This replaces {DAY_LABELS[dow]}&rsquo;s exercises, title and
-            rest-day setting with {DAY_LABELS[chosen.day_of_week]}&rsquo;s (
-            {chosen.exercises.length} exercise
-            {chosen.exercises.length === 1 ? '' : 's'}). It cannot be undone.
+            rest-day setting with {DAY_LABELS[source as DayOfWeek]}&rsquo;s (
+            {chosen.rows.filter((r) => r.exerciseId).length} exercise
+            {chosen.rows.filter((r) => r.exerciseId).length === 1 ? '' : 's'}). It cannot be undone.
           </p>
           <div className="grid grid-cols-2 gap-2.5">
             <ActionButton onClick={() => setConfirming(false)}>
@@ -744,24 +743,13 @@ function CopyFromDay({
             </ActionButton>
             <ActionButton
               tone="danger"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  const result = await copyDay(chosen.day_of_week, dow)
-                  setConfirming(false)
-                  setSource('')
-                  onCopied(
-                    result.ok
-                      ? {
-                          tone: 'success',
-                          text: `Copied ${DAY_LABELS[chosen.day_of_week]} into ${DAY_LABELS[dow]}.`,
-                        }
-                      : { tone: 'error', text: result.error },
-                  )
-                })
-              }
+              onClick={() => {
+                setConfirming(false)
+                setSource('')
+                onCopyFrom(source as DayOfWeek)
+              }}
             >
-              {pending ? 'Copying…' : 'Replace'}
+              Replace
             </ActionButton>
           </div>
         </div>
@@ -771,13 +759,13 @@ function CopyFromDay({
             <select
               value={source}
               aria-label={`Copy another day into ${DAY_LABELS[dow]}`}
-              onChange={(e) => setSource(e.target.value)}
+              onChange={(e) => setSource(e.target.value as DayOfWeek | '')}
               className="min-h-[44px] w-full rounded-lg border border-hairline bg-card-raised px-3 text-[14px] text-primary"
             >
               <option value="">Select a day…</option>
               {sources.map((d) => (
-                <option key={d.day_of_week} value={d.day_of_week}>
-                  {DAY_LABELS[d.day_of_week]} ({d.exercises.length})
+                <option key={d} value={d}>
+                  {DAY_LABELS[d]} ({state[d].rows.filter((r) => r.exerciseId).length})
                 </option>
               ))}
             </select>

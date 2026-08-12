@@ -56,11 +56,11 @@ const SETTINGS: Record<
   // Catalog, builder, session logger — pushed high and faded early so it lives
   // in the margins above and behind the cards rather than under them.
   edge: {
-    opacity: 0.2,
-    heightVh: 52,
-    offset: '-24%',
-    scale: '175%',
-    mask: 'linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.75) 28%, rgba(0,0,0,0.25) 62%, rgba(0,0,0,0) 88%)',
+    opacity: 0.45,
+    heightVh: 100,
+    offset: '0%',
+    scale: '110%',
+    mask: 'linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.8) 40%, rgba(0,0,0,0.3) 80%, rgba(0,0,0,0) 100%)',
   },
 }
 
@@ -83,8 +83,6 @@ export function AppBackground() {
         }}
       />
 
-      {/*
-        The background image has been temporarily removed per user request.
       <div
         className="absolute inset-x-0 top-0 overflow-hidden transition-all duration-500"
         style={{
@@ -95,16 +93,15 @@ export function AppBackground() {
         }}
       >
         <Image
-          src={bgTexture}
+          src="/fluid_bg.png"
           alt=""
           priority
           fetchPriority="high"
-          sizes="100vw"
-          className="h-full w-full object-cover object-top"
+          fill
+          className="object-cover object-center"
           style={{ transform: `scale(${s.scale}) translateY(${s.offset})` }}
         />
       </div>
-      */}
 
       {/* Vignette — settles the edges back toward the base colour. */}
       <div

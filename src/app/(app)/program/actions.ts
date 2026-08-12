@@ -39,69 +39,84 @@ export async function saveProgram(days: DraftDay[]): Promise<SaveResult> {
     }
   }
 
-  const keptExerciseIds: string[] = []
+  const dayResults = await Promise.all(
+    days.map(async (day) => {
+      const dayId = dayIdByDow.get(day.day_of_week)
+      if (!dayId) return { ok: false as const, error: `Unknown day ${day.day_of_week}.` }
 
-  for (const day of days) {
-    const dayId = dayIdByDow.get(day.day_of_week)
-    if (!dayId) return { ok: false, error: `Unknown day ${day.day_of_week}.` }
+      const { error: dayError } = await supabase
+        .from('program_days')
+        .update({
+          title: day.title.trim() || null,
+          is_rest_day: day.is_rest_day,
+        })
+        .eq('id', dayId)
 
-    const { error: dayError } = await supabase
-      .from('program_days')
-      .update({
-        title: day.title.trim() || null,
-        is_rest_day: day.is_rest_day,
-      })
-      .eq('id', dayId)
+      if (dayError) {
+        return {
+          ok: false as const,
+          error: `Could not save ${day.day_of_week}: ${dayError.message}`,
+        }
+      }
 
-    if (dayError) {
+      // A rest day carries no exercises; clearing them here is what makes the
+      // toggle destructive-but-explicit rather than merely hiding rows.
+      const exercises = day.is_rest_day ? [] : day.exercises
+
+      const exerciseResults = await Promise.all(
+        exercises.map(async (exercise, index) => {
+          const payload = {
+            program_day_id: dayId,
+            exercise_id: exercise.exercise_id,
+            prescribed_reps: exercise.prescribed_reps.trim() || null,
+            exercise_order: index,
+            rest_seconds: exercise.rest_seconds,
+            custom_fields: exercise.custom_fields ?? {},
+          }
+
+          if (exercise.id) {
+            const { error } = await supabase
+              .from('program_exercises')
+              .update(payload)
+              .eq('id', exercise.id)
+            if (error) {
+              return {
+                ok: false as const,
+                error: `Could not update an exercise: ${error.message}`,
+              }
+            }
+            return { ok: true as const, id: exercise.id }
+          } else {
+            const { data, error } = await supabase
+              .from('program_exercises')
+              .insert(payload)
+              .select('id')
+              .single()
+            if (error || !data) {
+              return {
+                ok: false as const,
+                error: `Could not add an exercise: ${error?.message ?? 'unknown error'}`,
+              }
+            }
+            return { ok: true as const, id: data.id }
+          }
+        })
+      )
+
+      const failedExercise = exerciseResults.find((r) => !r.ok)
+      if (failedExercise) return failedExercise
+
       return {
-        ok: false,
-        error: `Could not save ${day.day_of_week}: ${dayError.message}`,
+        ok: true as const,
+        ids: exerciseResults.map((r) => (r.ok ? r.id : '')).filter(Boolean),
       }
-    }
+    })
+  )
 
-    // A rest day carries no exercises; clearing them here is what makes the
-    // toggle destructive-but-explicit rather than merely hiding rows.
-    const exercises = day.is_rest_day ? [] : day.exercises
+  const failedDay = dayResults.find((r) => !r.ok)
+  if (failedDay) return { ok: false, error: failedDay.error }
 
-    for (const [index, exercise] of exercises.entries()) {
-      const payload = {
-        program_day_id: dayId,
-        exercise_id: exercise.exercise_id,
-        prescribed_reps: exercise.prescribed_reps.trim() || null,
-        exercise_order: index,
-        rest_seconds: exercise.rest_seconds,
-        custom_fields: exercise.custom_fields ?? {},
-      }
-
-      if (exercise.id) {
-        const { error } = await supabase
-          .from('program_exercises')
-          .update(payload)
-          .eq('id', exercise.id)
-        if (error) {
-          return {
-            ok: false,
-            error: `Could not update an exercise: ${error.message}`,
-          }
-        }
-        keptExerciseIds.push(exercise.id)
-      } else {
-        const { data, error } = await supabase
-          .from('program_exercises')
-          .insert(payload)
-          .select('id')
-          .single()
-        if (error || !data) {
-          return {
-            ok: false,
-            error: `Could not add an exercise: ${error?.message ?? 'unknown error'}`,
-          }
-        }
-        keptExerciseIds.push(data.id)
-      }
-    }
-  }
+  const keptExerciseIds = dayResults.flatMap((r) => (r.ok ? r.ids : []))
 
   // Drop anything the draft removed. Scoped to this program's days so a bad
   // draft can never reach another user's rows (RLS would refuse anyway).
