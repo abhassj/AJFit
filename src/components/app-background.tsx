@@ -3,8 +3,6 @@
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 
-import bgTexture from '@/assets/bg-texture.jpeg'
-
 /**
  * Ambient page backdrop.
  *

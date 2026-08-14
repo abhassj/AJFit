@@ -1,7 +1,6 @@
 'use client'
 
 import { m, useReducedMotion } from 'framer-motion'
-import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 
 import { saveProgram } from '@/app/(app)/program/actions'
@@ -145,7 +144,6 @@ export function ProgramBuilder({
     text: string
   } | null>(null)
   const [pending, startTransition] = useTransition()
-  const router = useRouter()
   const reduced = useReducedMotion()
 
   const exercisesById = useMemo(() => {
@@ -715,7 +713,10 @@ function CopyFromDay({
   const [confirming, setConfirming] = useState(false)
 
   const sources = DAYS_OF_WEEK.filter(
-    (d) => d !== dow && !state[d].isRestDay && state[d].rows.filter((r) => r.exerciseId).length > 0
+    (d) =>
+      d !== dow &&
+      !state[d].isRestDay &&
+      state[d].rows.filter((r) => r.exerciseId).length > 0,
   )
 
   if (sources.length === 0) return null
@@ -735,7 +736,8 @@ function CopyFromDay({
             This replaces {DAY_LABELS[dow]}&rsquo;s exercises, title and
             rest-day setting with {DAY_LABELS[source as DayOfWeek]}&rsquo;s (
             {chosen.rows.filter((r) => r.exerciseId).length} exercise
-            {chosen.rows.filter((r) => r.exerciseId).length === 1 ? '' : 's'}). It cannot be undone.
+            {chosen.rows.filter((r) => r.exerciseId).length === 1 ? '' : 's'}).
+            It cannot be undone.
           </p>
           <div className="grid grid-cols-2 gap-2.5">
             <ActionButton onClick={() => setConfirming(false)}>
@@ -765,7 +767,8 @@ function CopyFromDay({
               <option value="">Select a day…</option>
               {sources.map((d) => (
                 <option key={d} value={d}>
-                  {DAY_LABELS[d]} ({state[d].rows.filter((r) => r.exerciseId).length})
+                  {DAY_LABELS[d]} (
+                  {state[d].rows.filter((r) => r.exerciseId).length})
                 </option>
               ))}
             </select>

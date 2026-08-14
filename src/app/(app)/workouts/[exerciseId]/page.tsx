@@ -91,7 +91,10 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             </p>
             <ul>
               {subcategory.siblings.map((sibling) => (
-                <li key={sibling.id} className="border-t border-white/10 first:border-t-0">
+                <li
+                  key={sibling.id}
+                  className="border-t border-white/10 first:border-t-0"
+                >
                   <Link
                     href={`/workouts/${sibling.id}`}
                     className="group flex items-center gap-3.5 py-3.5 transition-colors"

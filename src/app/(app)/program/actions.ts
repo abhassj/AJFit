@@ -42,7 +42,8 @@ export async function saveProgram(days: DraftDay[]): Promise<SaveResult> {
   const dayResults = await Promise.all(
     days.map(async (day) => {
       const dayId = dayIdByDow.get(day.day_of_week)
-      if (!dayId) return { ok: false as const, error: `Unknown day ${day.day_of_week}.` }
+      if (!dayId)
+        return { ok: false as const, error: `Unknown day ${day.day_of_week}.` }
 
       const { error: dayError } = await supabase
         .from('program_days')
@@ -100,7 +101,7 @@ export async function saveProgram(days: DraftDay[]): Promise<SaveResult> {
             }
             return { ok: true as const, id: data.id }
           }
-        })
+        }),
       )
 
       const failedExercise = exerciseResults.find((r) => !r.ok)
@@ -110,7 +111,7 @@ export async function saveProgram(days: DraftDay[]): Promise<SaveResult> {
         ok: true as const,
         ids: exerciseResults.map((r) => (r.ok ? r.id : '')).filter(Boolean),
       }
-    })
+    }),
   )
 
   const failedDay = dayResults.find((r) => !r.ok)

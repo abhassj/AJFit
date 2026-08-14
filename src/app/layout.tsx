@@ -31,11 +31,22 @@ export default function RootLayout({
 }>) {
   return (
     // `dark` is fixed on: AJFit has no light theme (docs/AJFit_Design_Language.md).
+    //
+    // suppressHydrationWarning is scoped to <html> and <body> on purpose.
+    // Browser extensions inject attributes onto these two elements before React
+    // hydrates — a Scribe recorder adding data-scribe-recorder-ready is what
+    // surfaced it here, and password managers and theme switchers do the same.
+    // Nothing in this app writes those attributes, so the mismatch is never
+    // ours to fix. The flag only covers the element's own attributes, one level
+    // deep, so a genuine mismatch anywhere inside the tree still reports.
     <html
       lang="en"
+      suppressHydrationWarning
       className={`dark ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body suppressHydrationWarning className="flex min-h-full flex-col">
+        {children}
+      </body>
     </html>
   )
 }

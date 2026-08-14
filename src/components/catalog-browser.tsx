@@ -18,11 +18,11 @@ function countExercises(category: CatalogCategory) {
 }
 
 const CATEGORY_IMAGES: Record<string, string> = {
-  'Chest': '/category_chest.png',
-  'Back': '/category_back.png',
-  'Shoulders': '/category_shoulders.png',
-  'Legs': '/category_legs.png',
-  'Arms': '/category_arms.png',
+  Chest: '/category_chest.png',
+  Back: '/category_back.png',
+  Shoulders: '/category_shoulders.png',
+  Legs: '/category_legs.png',
+  Arms: '/category_arms.png',
   'Abs & Core': '/category_abs.png',
 }
 
@@ -82,7 +82,10 @@ function SubcategorySection({
 
       <ul className="mt-1">
         {subcategory.exercises.map((exercise) => (
-          <li key={exercise.id} className="border-t border-white/10 first:border-t-0">
+          <li
+            key={exercise.id}
+            className="border-t border-white/10 first:border-t-0"
+          >
             <Link
               href={`/workouts/${exercise.id}`}
               className="group flex items-center gap-3 py-3 transition-colors active:opacity-70"
@@ -126,7 +129,9 @@ export function CatalogBrowser({
                   whileTap={reduced ? undefined : { scale: 0.985 }}
                   transition={{ duration: 0.12 }}
                   className={`relative flex w-full items-center justify-between overflow-hidden rounded-2xl border bg-[#1a1d24] text-left transition-colors ${
-                    open ? 'border-danger/40 ring-1 ring-danger/20' : 'border-white/5 hover:border-white/10'
+                    open
+                      ? 'border-danger/40 ring-1 ring-danger/20'
+                      : 'border-white/5 hover:border-white/10'
                   }`}
                 >
                   <div className="absolute inset-y-0 right-0 w-3/5 opacity-80">
@@ -145,7 +150,9 @@ export function CatalogBrowser({
                   <span className="relative z-20 min-w-0 flex-1 p-5">
                     <span
                       className={`block text-[22px] uppercase leading-none font-black tracking-widest transition-colors ${
-                        open ? 'text-danger drop-shadow-md' : 'text-primary drop-shadow-sm'
+                        open
+                          ? 'text-danger drop-shadow-md'
+                          : 'text-primary drop-shadow-sm'
                       }`}
                     >
                       {category.name}

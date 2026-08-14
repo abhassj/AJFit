@@ -25,8 +25,8 @@ export function HomeDashboard({
           Dashboard
         </h1>
         {trimmedMotto && (
-          <p className="mt-2 max-w-sm text-sm font-bold italic tracking-wide text-secondary">
-            "{trimmedMotto}"
+          <p className="mt-2 max-w-sm text-sm font-bold tracking-wide text-secondary italic">
+            &ldquo;{trimmedMotto}&rdquo;
           </p>
         )}
       </header>

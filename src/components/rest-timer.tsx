@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react'
 
 import Image from 'next/image'
 
-import { CheckIcon, ChevronRightIcon, SkipIcon } from '@/components/icons'
+import { ChevronRightIcon } from '@/components/icons'
 import { formatDuration } from '@/lib/session-types'
 import { useNow } from '@/lib/use-now'
 
