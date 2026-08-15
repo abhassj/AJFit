@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+
+import { ServiceWorkerRegistrar } from '@/components/service-worker'
+
 import './globals.css'
 
 const geistSans = Geist({
@@ -15,6 +18,27 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'AJFit',
   description: 'Personal workout programming and logging',
+  // iOS ignores the web manifest for home-screen installs and reads these
+  // instead: without them, Add to Home Screen produces a Safari screenshot as
+  // the icon and opens the app in a browser tab rather than full screen.
+  appleWebApp: {
+    capable: true,
+    title: 'AJFit',
+    // The app paints its own dark ground to the top edge, so the status bar
+    // should sit over it rather than on an opaque bar of its own.
+    statusBarStyle: 'black-translucent',
+  },
+  other: {
+    /*
+     * `appleWebApp.capable` now emits the standardised
+     * `mobile-web-app-capable`, which Safari only began honouring in iOS 16.4.
+     * Anyone on an older iPhone would get an Add to Home Screen shortcut that
+     * opens in a Safari tab with the toolbar covering the bottom navigation.
+     * The legacy tag is two lines and fixes that; browsers that understand the
+     * standard name simply see the same value twice.
+     */
+    'apple-mobile-web-app-capable': 'yes',
+  },
 }
 
 export const viewport: Viewport = {
@@ -22,6 +46,9 @@ export const viewport: Viewport = {
   // The app is built for one-handed phone use; block pinch-zoom drift on inputs.
   width: 'device-width',
   initialScale: 1,
+  // Installed full-screen, the layout must reach under the notch and home
+  // indicator — every fixed element already offsets itself with env(safe-area-*).
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
@@ -46,6 +73,7 @@ export default function RootLayout({
     >
       <body suppressHydrationWarning className="flex min-h-full flex-col">
         {children}
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   )
