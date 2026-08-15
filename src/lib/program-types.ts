@@ -85,14 +85,28 @@ export type DraftDay = {
   exercises: DraftExercise[]
 }
 
-/** Today's day_of_week in the viewer's local timezone. */
-export function todayDayOfWeek(now: Date = new Date()): DayOfWeek {
+/*
+ * Both helpers below read `now`'s LOCAL fields, so the answer they give is
+ * only as correct as the timezone the passed Date carries.
+ *
+ * They used to default to `new Date()`. On the server that resolves in the host
+ * timezone — UTC on Vercel — so every caller silently computed UTC's today
+ * instead of the viewer's, and a user in Kolkata saw yesterday until 05:30
+ * local. The defaults are deliberately gone: a caller now has to supply a Date
+ * that has already been resolved into the viewer's zone, and forgetting is a
+ * type error rather than a wrong date shipped to production.
+ *
+ * Server callers get that Date from getViewerNow() in src/lib/viewer-time.ts.
+ */
+
+/** `now`'s day_of_week, read from its local fields. */
+export function todayDayOfWeek(now: Date): DayOfWeek {
   // getDay() is 0=Sunday; DAYS_OF_WEEK starts at Monday.
   return DAYS_OF_WEEK[(now.getDay() + 6) % 7]
 }
 
-/** Local calendar date as YYYY-MM-DD, avoiding the UTC shift of toISOString. */
-export function localDateKey(now: Date = new Date()): string {
+/** `now`'s calendar date as YYYY-MM-DD, avoiding the UTC shift of toISOString. */
+export function localDateKey(now: Date): string {
   const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const d = String(now.getDate()).padStart(2, '0')

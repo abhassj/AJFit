@@ -1,12 +1,12 @@
 import 'server-only'
 
 import { requireUser } from '@/lib/auth'
-import { localDateKey } from '@/lib/program-types'
 import {
   intervalToSeconds,
   type SessionExercise,
   type WorkoutSession,
 } from '@/lib/session-types'
+import { getViewerDateKey } from '@/lib/viewer-time'
 
 const SESSION_SELECT = `
   id,
@@ -89,15 +89,17 @@ function shapeSession(row: {
  * either in progress, completed, or explicitly skipped.
  */
 export async function getSessionForDate(
-  date: string = localDateKey(),
+  /** Defaults to the viewer's today, resolved in their own timezone. */
+  date?: string,
 ): Promise<WorkoutSession | null> {
   const { supabase, user } = await requireUser()
+  const day = date ?? (await getViewerDateKey())
 
   const { data, error } = await supabase
     .from('sessions')
     .select(SESSION_SELECT)
     .eq('user_id', user.id)
-    .eq('session_date', date)
+    .eq('session_date', day)
     .order('start_time', { ascending: false })
     .limit(1)
     .maybeSingle()

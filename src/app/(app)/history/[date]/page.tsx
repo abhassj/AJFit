@@ -2,8 +2,9 @@ import { notFound } from 'next/navigation'
 
 import { DayLogger } from '@/components/day-logger'
 import { getProgramDay } from '@/lib/program'
-import { DAYS_OF_WEEK, localDateKey } from '@/lib/program-types'
+import { DAYS_OF_WEEK } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
+import { getViewerDateKey } from '@/lib/viewer-time'
 
 type PageProps = { params: Promise<{ date: string }> }
 
@@ -27,9 +28,10 @@ export default async function DayPage({ params }: PageProps) {
   if (Number.isNaN(parsed.getTime())) notFound()
 
   const dow = DAYS_OF_WEEK[(parsed.getDay() + 6) % 7]
-  const [session, { program }] = await Promise.all([
+  const [session, { program }, today] = await Promise.all([
     getSessionForDate(date),
     getProgramDay(dow),
+    getViewerDateKey(),
   ])
 
   return (
@@ -38,7 +40,7 @@ export default async function DayPage({ params }: PageProps) {
       session={session}
       program={program}
       calendarDow={dow}
-      isFuture={date > localDateKey()}
+      isFuture={date > today}
     />
   )
 }

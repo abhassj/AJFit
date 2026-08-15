@@ -4,6 +4,7 @@ import { AppBackground } from '@/components/app-background'
 import { AppHeader } from '@/components/app-header'
 import { BottomNav } from '@/components/bottom-nav'
 import { MotionProvider } from '@/components/motion'
+import { TimezoneSync } from '@/components/timezone-sync'
 import { getProfile } from '@/lib/profile'
 import { createClient } from '@/lib/supabase/server'
 
@@ -50,6 +51,13 @@ export default async function AppLayout({
 
   return (
     <MotionProvider>
+      {/*
+       * Reports the browser's IANA timezone so the server can resolve "today"
+       * for this person rather than for UTC. Mounted in the shell because every
+       * date-sensitive screen lives under it, and it must be present before the
+       * first date is rendered rather than per-page.
+       */}
+      <TimezoneSync />
       <AppBackground />
       {/* Bottom padding clears the fixed nav, including the iOS home indicator. */}
       <div className="mx-auto min-h-dvh w-full max-w-lg pb-[calc(5.5rem+env(safe-area-inset-bottom))]">

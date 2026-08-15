@@ -4,15 +4,11 @@ import { revalidatePath } from 'next/cache'
 import { unstable_rethrow } from 'next/navigation'
 
 import { getOrCreateProgram } from '@/lib/program'
-import {
-  DAY_LABELS,
-  DAYS_OF_WEEK,
-  localDateKey,
-  type DayOfWeek,
-} from '@/lib/program-types'
+import { DAY_LABELS, DAYS_OF_WEEK, type DayOfWeek } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
 import { requireUser } from '@/lib/auth'
 import { secondsToInterval } from '@/lib/session-types'
+import { getViewerDateKey } from '@/lib/viewer-time'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -40,7 +36,8 @@ export async function startBackfill(
   programDayOfWeek?: DayOfWeek,
 ): Promise<ActionResult> {
   if (!DATE_KEY.test(date)) return fail('Invalid date.')
-  if (date > localDateKey()) return fail('That date is in the future.')
+  if (date > (await getViewerDateKey()))
+    return fail('That date is in the future.')
 
   try {
     const { supabase, user } = await requireUser()

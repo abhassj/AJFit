@@ -5,14 +5,10 @@ import { unstable_rethrow } from 'next/navigation'
 
 import { requireUser } from '@/lib/auth'
 import { getOrCreateProgram } from '@/lib/program'
-import {
-  DAY_LABELS,
-  localDateKey,
-  todayDayOfWeek,
-  type DayOfWeek,
-} from '@/lib/program-types'
+import { DAY_LABELS, type DayOfWeek } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
 import { intervalToSeconds, secondsToInterval } from '@/lib/session-types'
+import { getViewerDateKey, getViewerDayOfWeek } from '@/lib/viewer-time'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -38,13 +34,13 @@ export async function startSession(
 ): Promise<ActionResult> {
   try {
     const { supabase, user } = await requireUser()
-    const date = localDateKey()
+    const date = await getViewerDateKey()
 
     const existing = await getSessionForDate(date)
     if (existing) return fail('A session already exists for today.')
 
     const program = await getOrCreateProgram()
-    const chosen = programDayOfWeek ?? todayDayOfWeek()
+    const chosen = programDayOfWeek ?? (await getViewerDayOfWeek())
     const day = program.days.find((d) => d.day_of_week === chosen)
     if (!day) return fail('No program day for that selection.')
     if (day.is_rest_day) {
@@ -106,13 +102,14 @@ export async function startSession(
 export async function skipDay(): Promise<ActionResult> {
   try {
     const { supabase, user } = await requireUser()
-    const date = localDateKey()
+    const date = await getViewerDateKey()
 
     const existing = await getSessionForDate(date)
     if (existing) return fail('A session already exists for today.')
 
     const program = await getOrCreateProgram()
-    const day = program.days.find((d) => d.day_of_week === todayDayOfWeek())
+    const viewerDow = await getViewerDayOfWeek()
+    const day = program.days.find((d) => d.day_of_week === viewerDow)
 
     const { error } = await supabase.from('sessions').insert({
       user_id: user.id,

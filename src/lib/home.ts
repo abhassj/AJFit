@@ -3,6 +3,7 @@ import 'server-only'
 import { getOrCreateProgram } from '@/lib/program'
 import type { DayOfWeek } from '@/lib/program-types'
 import { requireUser } from '@/lib/auth'
+import { getViewerNow } from '@/lib/viewer-time'
 import { createClient } from '@/lib/supabase/server'
 import {
   addDays,
@@ -129,7 +130,10 @@ async function buildMonth(
 
 /** A single month's calendar, used by the Home calendar's month swipe. */
 export async function getMonthCalendar(year: number, month: number) {
-  return buildMonth(year, month, new Date())
+  // The viewer's now, not the server's. The month grid itself is pure calendar
+  // arithmetic, but "which cell is today" and "which cells are still in the
+  // future" both depend on whose day it is.
+  return buildMonth(year, month, await getViewerNow())
 }
 
 /**
@@ -138,16 +142,26 @@ export async function getMonthCalendar(year: number, month: number) {
  * Sessions for the week and the month are fetched as one range query and split
  * in memory, since the two windows overlap for most of the month.
  */
-export async function getHomeData(now: Date = new Date()): Promise<HomeData> {
+export async function getHomeData(now?: Date): Promise<HomeData> {
   // RLS scopes every table below to the caller, so the user id is not needed
   // here — but the call still has to happen, to redirect an expired session.
   const { supabase } = await requireUser()
 
-  const today = dateKey(now)
-  const year = now.getFullYear()
-  const month = now.getMonth()
+  /*
+   * `now` used to default to `new Date()`, which on the server is UTC. Every
+   * figure below — the week window, the month window, the 30-day window, the
+   * today highlight, the upcoming/missed split — was therefore computed against
+   * UTC's calendar rather than the viewer's, and was wrong for part of every
+   * day for anyone not on UTC. The parameter stays only so tests can pin a
+   * fixed moment; real callers pass nothing and get the viewer's own clock.
+   */
+  const viewerNow = now ?? (await getViewerNow())
 
-  const weekStartDate = startOfWeek(now)
+  const today = dateKey(viewerNow)
+  const year = viewerNow.getFullYear()
+  const month = viewerNow.getMonth()
+
+  const weekStartDate = startOfWeek(viewerNow)
   const weekEndDate = addDays(weekStartDate, 6)
   const monthStartDate = new Date(year, month, 1)
   const monthEndDate = new Date(year, month + 1, 0)
@@ -160,7 +174,7 @@ export async function getHomeData(now: Date = new Date()): Promise<HomeData> {
     weekEndDate > monthEndDate ? weekEndDate : monthEndDate,
   )
 
-  const thirtyDayStart = dateKey(addDays(now, -29))
+  const thirtyDayStart = dateKey(addDays(viewerNow, -29))
 
   const [sessionsResult, totalResult, recentResult, program] =
     await Promise.all([
@@ -200,7 +214,7 @@ export async function getHomeData(now: Date = new Date()): Promise<HomeData> {
     program.days.map((d) => [d.day_of_week, d.is_rest_day]),
   )
 
-  const week: WeekDay[] = weekDates(now).map(({ date, day_of_week }) => {
+  const week: WeekDay[] = weekDates(viewerNow).map(({ date, day_of_week }) => {
     const key = dateKey(date)
     const session = byDate.get(key)
     return {

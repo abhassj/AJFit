@@ -1,8 +1,9 @@
 import { SessionRunner } from '@/components/session-runner'
 import { SessionSummary, StartWorkout } from '@/components/start-workout'
 import { getProgramDay } from '@/lib/program'
-import { DAY_LABELS, todayDayOfWeek } from '@/lib/program-types'
+import { DAY_LABELS } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
+import { getViewerDayOfWeek } from '@/lib/viewer-time'
 
 export const metadata = { title: 'Start Workout · AJFit' }
 
@@ -11,7 +12,7 @@ export const metadata = { title: 'Start Workout · AJFit' }
 export const dynamic = 'force-dynamic'
 
 export default async function StartPage() {
-  const dow = todayDayOfWeek()
+  const dow = await getViewerDayOfWeek()
   const [{ program, day }, session] = await Promise.all([
     getProgramDay(dow),
     getSessionForDate(),

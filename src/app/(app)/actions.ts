@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { localDateKey } from '@/lib/program-types'
 import { requireUser } from '@/lib/auth'
+import { getViewerDateKey } from '@/lib/viewer-time'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -19,7 +19,7 @@ export async function logBodyweight(weight: number): Promise<ActionResult> {
 
   const { error } = await supabase.from('weight_logs').insert({
     user_id: user.id,
-    log_date: localDateKey(),
+    log_date: await getViewerDateKey(),
     weight,
   })
 
