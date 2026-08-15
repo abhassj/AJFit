@@ -8,6 +8,7 @@ import { Avatar } from '@/components/avatar'
 import { ActionButton, Banner } from '@/components/ui'
 import type { ProfilePageData } from '@/lib/profile'
 import { createClient } from '@/lib/supabase/client'
+import { parseBodyweight } from '@/lib/validation'
 
 type Outcome = { ok: true } | { ok: false; error: string }
 
@@ -21,6 +22,8 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url)
   const [weight, setWeight] = useState('')
   const [goal, setGoal] = useState(profile.goal_bodyweight?.toString() ?? '')
+  const [weightError, setWeightError] = useState<string | null>(null)
+  const [goalError, setGoalError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState<{
     tone: 'error' | 'success'
@@ -228,63 +231,123 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
         />
 
         <div className="mt-4 space-y-3">
-          <div className="flex items-end gap-2">
-            <label className="min-w-0 flex-1">
-              <span className="label-caps">Log today’s weight</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={weight}
-                placeholder="e.g. 78.5"
-                onChange={(e) => setWeight(e.target.value)}
-                className="mt-1.5 min-h-[46px] w-full rounded-xl border border-hairline bg-card-raised px-3 text-[15px] text-primary placeholder:text-faint"
-              />
-            </label>
-            <ActionButton
-              tone="primary"
-              ariaLabel="Log today's weight"
-              disabled={busy || weight.trim() === ''}
-              className="shrink-0 px-5"
-              onClick={() =>
-                run(
-                  () => logBodyweight(Number(weight)),
-                  'Weight logged.',
-                  () => setWeight(''),
-                )
-              }
-            >
-              Add
-            </ActionButton>
+          <div>
+            <div className="flex items-end gap-2">
+              <label className="min-w-0 flex-1">
+                <span className="label-caps">Log today’s weight</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={weight}
+                  placeholder="e.g. 78.5"
+                  maxLength={6}
+                  aria-invalid={weightError ? true : undefined}
+                  aria-describedby={weightError ? 'weight-error' : undefined}
+                  onChange={(e) => {
+                    setWeight(e.target.value)
+                    setWeightError(null)
+                  }}
+                  className={`mt-1.5 min-h-[46px] w-full rounded-xl border bg-card-raised px-3 text-[15px] text-primary placeholder:text-faint ${
+                    weightError
+                      ? 'border-danger/70 ring-1 ring-danger/30'
+                      : 'border-hairline'
+                  }`}
+                />
+              </label>
+              <ActionButton
+                tone="primary"
+                ariaLabel="Log today's weight"
+                disabled={busy || weight.trim() === ''}
+                className="shrink-0 px-5"
+                onClick={() => {
+                  /*
+                   * This used to hand `Number(weight)` straight to the action.
+                   * The action does reject a NaN, but only after a round trip,
+                   * and it reported it in the page-level banner rather than
+                   * against the field that caused it. Parsing here means the
+                   * message appears where the user is looking; the action still
+                   * re-checks, because it has to.
+                   */
+                  const parsed = parseBodyweight(weight)
+                  if (!parsed.ok) {
+                    setWeightError(parsed.error)
+                    return
+                  }
+                  run(
+                    () => logBodyweight(parsed.value),
+                    'Weight logged.',
+                    () => setWeight(''),
+                  )
+                }}
+              >
+                Add
+              </ActionButton>
+            </div>
+            {weightError && (
+              <span
+                id="weight-error"
+                role="alert"
+                className="mt-1.5 block text-[12px] font-medium text-danger"
+              >
+                {weightError}
+              </span>
+            )}
           </div>
 
-          <div className="flex items-end gap-2">
-            <label className="min-w-0 flex-1">
-              <span className="label-caps">Goal weight</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={goal}
-                placeholder="e.g. 75"
-                onChange={(e) => setGoal(e.target.value)}
-                className="mt-1.5 min-h-[46px] w-full rounded-xl border border-hairline bg-card-raised px-3 text-[15px] text-primary placeholder:text-faint"
-              />
-            </label>
-            <ActionButton
-              ariaLabel="Save goal weight"
-              disabled={busy}
-              className="shrink-0 px-5"
-              onClick={() =>
-                run(
-                  () =>
-                    saveGoalBodyweight(
-                      goal.trim() === '' ? null : Number(goal),
-                    ),
-                  'Goal saved.',
-                )
-              }
-            >
-              Save
-            </ActionButton>
+          <div>
+            <div className="flex items-end gap-2">
+              <label className="min-w-0 flex-1">
+                <span className="label-caps">Goal weight</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={goal}
+                  placeholder="e.g. 75"
+                  maxLength={6}
+                  aria-invalid={goalError ? true : undefined}
+                  aria-describedby={goalError ? 'goal-error' : undefined}
+                  onChange={(e) => {
+                    setGoal(e.target.value)
+                    setGoalError(null)
+                  }}
+                  className={`mt-1.5 min-h-[46px] w-full rounded-xl border bg-card-raised px-3 text-[15px] text-primary placeholder:text-faint ${
+                    goalError
+                      ? 'border-danger/70 ring-1 ring-danger/30'
+                      : 'border-hairline'
+                  }`}
+                />
+              </label>
+              <ActionButton
+                ariaLabel="Save goal weight"
+                disabled={busy}
+                className="shrink-0 px-5"
+                onClick={() => {
+                  // Blank is meaningful here — it clears the goal.
+                  if (goal.trim() === '') {
+                    setGoalError(null)
+                    run(() => saveGoalBodyweight(null), 'Goal cleared.')
+                    return
+                  }
+                  const parsed = parseBodyweight(goal)
+                  if (!parsed.ok) {
+                    setGoalError(parsed.error)
+                    return
+                  }
+                  run(() => saveGoalBodyweight(parsed.value), 'Goal saved.')
+                }}
+              >
+                Save
+              </ActionButton>
+            </div>
+            {goalError && (
+              <span
+                id="goal-error"
+                role="alert"
+                className="mt-1.5 block text-[12px] font-medium text-danger"
+              >
+                {goalError}
+              </span>
+            )}
           </div>
         </div>
       </section>

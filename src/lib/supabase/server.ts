@@ -18,8 +18,22 @@ export async function createClient() {
        * Supabase queries go through fetch, so a read repeated after a write in
        * the same request would be served the stale pre-write response. Opt every
        * data request out of that cache — none of this is static content.
+       *
+       * The deadline is the second thing here. A request to an upstream that
+       * accepts the connection and then never answers — a gateway holding the
+       * socket open for a backend that is down — has no timeout of its own, so
+       * the render simply hangs and the user watches a blank tab until the
+       * hosting platform gives up. Failing at ten seconds turns that into a
+       * thrown error, which the error boundary catches and offers to retry.
+       * Every query on these pages is a small indexed read; ten seconds is
+       * already far beyond a healthy one.
        */
-      fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+      fetch: (input, init) =>
+        fetch(input, {
+          ...init,
+          cache: 'no-store',
+          signal: init?.signal ?? AbortSignal.timeout(10_000),
+        }),
     },
     cookies: {
       getAll() {

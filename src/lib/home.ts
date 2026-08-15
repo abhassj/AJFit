@@ -2,6 +2,7 @@ import 'server-only'
 
 import { getOrCreateProgram } from '@/lib/program'
 import type { DayOfWeek } from '@/lib/program-types'
+import { requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 import {
   addDays,
@@ -138,12 +139,9 @@ export async function getMonthCalendar(year: number, month: number) {
  * in memory, since the two windows overlap for most of the month.
  */
 export async function getHomeData(now: Date = new Date()): Promise<HomeData> {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in')
+  // RLS scopes every table below to the caller, so the user id is not needed
+  // here — but the call still has to happen, to redirect an expired session.
+  const { supabase } = await requireUser()
 
   const today = dateKey(now)
   const year = now.getFullYear()

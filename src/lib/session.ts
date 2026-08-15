@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 import { localDateKey } from '@/lib/program-types'
 import {
   intervalToSeconds,
@@ -91,12 +91,7 @@ function shapeSession(row: {
 export async function getSessionForDate(
   date: string = localDateKey(),
 ): Promise<WorkoutSession | null> {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in')
+  const { supabase, user } = await requireUser()
 
   const { data, error } = await supabase
     .from('sessions')

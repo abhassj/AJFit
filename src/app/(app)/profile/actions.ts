@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -16,11 +16,7 @@ export async function saveProfileDetails(input: {
   display_name: string
   motto: string
 }): Promise<ActionResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return fail('Not signed in.')
+  const { supabase, user } = await requireUser()
 
   const { error } = await supabase.from('profiles').upsert(
     {
@@ -45,11 +41,7 @@ export async function saveProfileDetails(input: {
  * round-trips through the server; this only persists the resulting URL.
  */
 export async function saveAvatarUrl(avatarUrl: string): Promise<ActionResult> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return fail('Not signed in.')
+  const { supabase, user } = await requireUser()
 
   // Only ever accept a URL inside this user's own avatars folder.
   if (avatarUrl && !avatarUrl.includes(`/avatars/${user.id}/`)) {

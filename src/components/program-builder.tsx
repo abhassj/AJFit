@@ -23,6 +23,13 @@ import {
   type DraftDay,
   type Program,
 } from '@/lib/program-types'
+import {
+  DAY_TITLE_MAX,
+  SPLIT_NAME_MAX,
+  parseDayTitle,
+  parseRestSeconds,
+  parseSplitName,
+} from '@/lib/validation'
 
 /** A row in the builder. Mirrors DraftExercise plus the cascade's own state. */
 type Row = {
@@ -46,14 +53,83 @@ type DayState = {
 let keyCounter = 0
 const nextKey = () => `row-${++keyCounter}`
 
-/** Blank or unparseable input means no rest timer, not zero. */
-function parseRestSeconds(value: string): number | null {
-  const trimmed = value.trim()
-  if (trimmed === '') return null
-  const n = Number(trimmed)
-  if (!Number.isFinite(n) || n <= 0) return null
-  return Math.round(n)
+/**
+ * Everything wrong with the current draft, keyed for display.
+ *
+ * Collected in one pass so the Save button can be blocked and each message can
+ * be shown against the field that caused it, rather than surfacing the first
+ * failure as a lone banner and making the user hunt for the rest.
+ */
+type Problems = {
+  splitName: string | null
+  /** `${dow}` → message */
+  dayTitle: Partial<Record<DayOfWeek, string>>
+  /** row key → { field: message } */
+  rows: Record<string, { exercise?: string; rest?: string }>
+  /** Days that have at least one problem, for the summary banner. */
+  days: DayOfWeek[]
 }
+
+function collectProblems(
+  splitName: string,
+  state: Record<DayOfWeek, DayState>,
+): Problems {
+  const problems: Problems = {
+    splitName: null,
+    dayTitle: {},
+    rows: {},
+    days: [],
+  }
+
+  const name = parseSplitName(splitName)
+  if (!name.ok) problems.splitName = name.error
+
+  for (const dow of DAYS_OF_WEEK) {
+    const day = state[dow]
+    let dayHasProblem = false
+
+    const title = parseDayTitle(day.title)
+    if (!title.ok) {
+      problems.dayTitle[dow] = title.error
+      dayHasProblem = true
+    }
+
+    // A rest day's rows are cleared on save, so validating them would block the
+    // save on values that are about to be discarded.
+    if (day.isRestDay) {
+      if (dayHasProblem) problems.days.push(dow)
+      continue
+    }
+
+    for (const row of day.rows) {
+      const rowProblems: { exercise?: string; rest?: string } = {}
+
+      // A row that is completely untouched is just an empty slot the user
+      // added and has not filled yet — dropping it silently is right. A row
+      // that is half-filled is a different thing: the user started choosing and
+      // stopped, and losing that without a word is what this catches.
+      const started = row.categoryId || row.subcategoryId || row.restSeconds
+      if (!row.exerciseId && started) {
+        rowProblems.exercise =
+          'Finish choosing an exercise, or remove this row.'
+      }
+
+      const rest = parseRestSeconds(row.restSeconds)
+      if (!rest.ok) rowProblems.rest = rest.error
+
+      if (rowProblems.exercise || rowProblems.rest) {
+        problems.rows[row.key] = rowProblems
+        dayHasProblem = true
+      }
+    }
+
+    if (dayHasProblem) problems.days.push(dow)
+  }
+
+  return problems
+}
+
+const hasProblems = (p: Problems) => p.splitName !== null || p.days.length > 0
 
 function buildInitialState(
   program: Program,
@@ -109,16 +185,21 @@ function toDraft(state: Record<DayOfWeek, DayState>): DraftDay[] {
       title: day.title,
       is_rest_day: day.isRestDay,
       exercises: day.rows
-        // A half-finished cascade is not a real entry; drop it rather than
-        // failing the whole save.
+        // Rows with no exercise chosen are dropped. A half-finished one is
+        // caught by collectProblems() before this runs and blocks the save, so
+        // the only rows reaching here are genuinely untouched empty slots.
         .filter((row) => row.exerciseId)
         .map((row) => ({
           id: row.id,
           exercise_id: row.exerciseId,
           prescribed_reps: row.prescribedReps,
           // Blank stays null: an unset rest timer is a real choice, never a
-          // guessed default.
-          rest_seconds: parseRestSeconds(row.restSeconds),
+          // guessed default. Validation has already run, so the parse cannot
+          // fail here; the fallback keeps the type honest rather than asserting.
+          rest_seconds: (() => {
+            const parsed = parseRestSeconds(row.restSeconds)
+            return parsed.ok ? parsed.value : null
+          })(),
           custom_fields: Object.fromEntries(
             row.customFields
               .filter((f) => f.key.trim())
@@ -137,14 +218,31 @@ export function ProgramBuilder({
   catalog: CatalogCategory[]
 }) {
   const [state, setState] = useState(() => buildInitialState(program, catalog))
+  const [splitName, setSplitName] = useState(program.name)
   const [editing, setEditing] = useState(false)
   const [openDay, setOpenDay] = useState<DayOfWeek | null>(null)
   const [message, setMessage] = useState<{
     tone: 'error' | 'success'
     text: string
   } | null>(null)
+  /**
+   * Validation messages appear only after the first save attempt.
+   *
+   * Marking a field red the instant it is focused and still empty is hostile —
+   * the user has not finished yet. Waiting until they ask to save means every
+   * message shown is about something they actually consider done.
+   */
+  const [showProblems, setShowProblems] = useState(false)
   const [pending, startTransition] = useTransition()
   const reduced = useReducedMotion()
+
+  const problems = useMemo(
+    () => collectProblems(splitName, state),
+    [splitName, state],
+  )
+  const blocked = hasProblems(problems)
+  // Only surface them once the user has tried to save at least once.
+  const visible = showProblems ? problems : null
 
   const exercisesById = useMemo(() => {
     const map = new Map<string, string>()
@@ -221,10 +319,28 @@ export function ProgramBuilder({
 
   function handleSave() {
     setMessage(null)
+    setShowProblems(true)
+
+    if (blocked) {
+      // Name the days rather than saying "fix the errors" — the offending field
+      // is usually inside a collapsed day the user cannot see from here.
+      const where = problems.days.map((d) => DAY_LABELS[d]).join(', ')
+      setMessage({
+        tone: 'error',
+        text: problems.splitName
+          ? problems.splitName
+          : `Check ${where} — something there needs fixing before this can save.`,
+      })
+      // Open the first day that has a problem so the inline message is visible.
+      if (problems.days.length > 0) setOpenDay(problems.days[0])
+      return
+    }
+
     startTransition(async () => {
-      const result = await saveProgram(toDraft(state))
+      const result = await saveProgram(splitName, toDraft(state))
       if (result.ok) {
         setMessage({ tone: 'success', text: 'Program saved.' })
+        setShowProblems(false)
         setEditing(false)
       } else {
         setMessage({ tone: 'error', text: result.error })
@@ -235,11 +351,50 @@ export function ProgramBuilder({
   return (
     <main className="px-4 pt-2">
       <header className="flex items-start justify-between gap-3 px-1 pb-5">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="label-caps">Weekly Template</p>
-          <h1 className="mt-1.5 text-[28px] leading-tight font-black tracking-tight text-primary drop-shadow-sm">
-            My Workout Split
-          </h1>
+          {/*
+           * The split's name was previously hard-coded into this heading while
+           * programs.name sat in the database unreachable. In edit mode the
+           * heading becomes the field that writes it.
+           */}
+          {editing ? (
+            <div className="mt-1.5">
+              <input
+                type="text"
+                value={splitName}
+                maxLength={SPLIT_NAME_MAX}
+                aria-label="Split name"
+                aria-invalid={visible?.splitName ? true : undefined}
+                aria-describedby={
+                  visible?.splitName ? 'split-name-error' : undefined
+                }
+                placeholder="Name your split"
+                onChange={(e) => {
+                  setSplitName(e.target.value)
+                  setMessage(null)
+                }}
+                className={`w-full rounded-lg border bg-card-raised px-3 py-2 text-[24px] leading-tight font-black tracking-tight text-primary placeholder:font-bold placeholder:text-faint ${
+                  visible?.splitName
+                    ? 'border-danger/70 ring-1 ring-danger/30'
+                    : 'border-hairline'
+                }`}
+              />
+              {visible?.splitName && (
+                <span
+                  id="split-name-error"
+                  role="alert"
+                  className="mt-1.5 block text-[12px] font-medium text-danger"
+                >
+                  {visible.splitName}
+                </span>
+              )}
+            </div>
+          ) : (
+            <h1 className="mt-1.5 truncate text-[28px] leading-tight font-black tracking-tight text-primary drop-shadow-sm">
+              {splitName.trim() || 'My Workout Split'}
+            </h1>
+          )}
         </div>
 
         <button
@@ -344,6 +499,7 @@ export function ProgramBuilder({
                     state={state}
                     catalog={catalog}
                     editing={editing}
+                    problems={visible}
                     onCopyFrom={(source) => handleCopyFrom(source, dow)}
                     exercisesById={exercisesById}
                     onUpdateDay={(patch) => updateDay(dow, patch)}
@@ -381,6 +537,7 @@ function DayPanel({
   state,
   catalog,
   editing,
+  problems,
   onCopyFrom,
   exercisesById,
   onUpdateDay,
@@ -394,6 +551,8 @@ function DayPanel({
   state: Record<DayOfWeek, DayState>
   catalog: CatalogCategory[]
   editing: boolean
+  /** Null until the user has attempted a save. */
+  problems: Problems | null
   onCopyFrom: (sourceDow: DayOfWeek) => void
   exercisesById: Map<string, string>
   onUpdateDay: (patch: Partial<DayState>) => void
@@ -457,7 +616,10 @@ function DayPanel({
 
       <TextField
         label="Day title"
+        id={`day-title-${dow}`}
         value={day.title}
+        maxLength={DAY_TITLE_MAX}
+        error={problems?.dayTitle[dow] ?? null}
         onChange={(title) => onUpdateDay({ title })}
         placeholder={`e.g. Chest & Tri`}
       />
@@ -486,6 +648,7 @@ function DayPanel({
                 index={index}
                 total={day.rows.length}
                 catalog={catalog}
+                problems={problems?.rows[row.key]}
                 onChange={(patch) => onUpdateRow(row.key, patch)}
                 onRemove={() => onRemoveRow(row.key)}
                 onMove={(delta) => onMoveRow(index, delta)}
@@ -510,6 +673,7 @@ function ExerciseRow({
   index,
   total,
   catalog,
+  problems,
   onChange,
   onRemove,
   onMove,
@@ -518,6 +682,7 @@ function ExerciseRow({
   index: number
   total: number
   catalog: CatalogCategory[]
+  problems?: { exercise?: string; rest?: string }
   onChange: (patch: Partial<Row>) => void
   onRemove: () => void
   onMove: (delta: number) => void
@@ -583,12 +748,16 @@ function ExerciseRow({
       />
       <Select
         label="Exercise"
+        id={`exercise-${row.key}`}
         placeholder={
           subcategory ? 'Select exercise' : 'Pick a subcategory first'
         }
         value={row.exerciseId}
         disabled={!subcategory}
         options={subcategory?.exercises ?? []}
+        // The cascade's message lands on the last step, because that is the one
+        // that actually decides whether the row is real.
+        error={problems?.exercise ?? null}
         onChange={(exerciseId) => onChange({ exerciseId })}
       />
 
@@ -596,13 +765,17 @@ function ExerciseRow({
         <TextField
           label="Prescribed reps"
           value={row.prescribedReps}
+          maxLength={40}
           onChange={(prescribedReps) => onChange({ prescribedReps })}
           placeholder="e.g. 3x6-10"
         />
         <TextField
           label="Rest timer (sec)"
+          id={`rest-${row.key}`}
           value={row.restSeconds}
           inputMode="numeric"
+          maxLength={4}
+          error={problems?.rest ?? null}
           onChange={(restSeconds) => onChange({ restSeconds })}
           placeholder="Optional"
         />

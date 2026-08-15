@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { unstable_rethrow } from 'next/navigation'
 
 import { getOrCreateProgram } from '@/lib/program'
 import {
@@ -10,7 +11,7 @@ import {
   type DayOfWeek,
 } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 import { secondsToInterval } from '@/lib/session-types'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -42,11 +43,7 @@ export async function startBackfill(
   if (date > localDateKey()) return fail('That date is in the future.')
 
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return fail('Not signed in.')
+    const { supabase, user } = await requireUser()
 
     const existing = await getSessionForDate(date)
     if (existing) return fail('That day already has a session.')
@@ -100,6 +97,8 @@ export async function startBackfill(
     refresh(date)
     return { ok: true }
   } catch (e) {
+    // Let redirect() from requireUser() through — see start/actions.ts.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -110,12 +109,14 @@ export async function deleteSet(
   date: string,
 ): Promise<ActionResult> {
   try {
-    const supabase = await createClient()
+    const { supabase } = await requireUser()
     const { error } = await supabase.from('sets').delete().eq('id', setId)
     if (error) return fail(`Could not delete the set: ${error.message}`)
     refresh(date)
     return { ok: true }
   } catch (e) {
+    // Let redirect() from requireUser() through — see start/actions.ts.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -126,7 +127,7 @@ export async function deleteSession(
   date: string,
 ): Promise<ActionResult> {
   try {
-    const supabase = await createClient()
+    const { supabase } = await requireUser()
     // session_exercises and sets both cascade from sessions.
     const { error } = await supabase
       .from('sessions')
@@ -136,6 +137,8 @@ export async function deleteSession(
     refresh(date)
     return { ok: true }
   } catch (e) {
+    // Let redirect() from requireUser() through — see start/actions.ts.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }

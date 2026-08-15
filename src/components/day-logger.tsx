@@ -25,6 +25,7 @@ import {
 } from '@/components/icons'
 import { FadeIn } from '@/components/motion'
 import { NumericEntry, type NumericField } from '@/components/numeric-keypad'
+import { validateSetEntry } from '@/lib/validation'
 import { ActionButton, Banner, TripleActionRow } from '@/components/ui'
 import { formatLongDate } from '@/lib/home-types'
 import { ProgramDayPicker } from '@/components/program-day-picker'
@@ -526,25 +527,27 @@ function EditableExercise({
   const [weight, setWeight] = useState('')
   const [field, setField] = useState<NumericField>('reps')
   const [editingSetId, setEditingSetId] = useState<string | null>(null)
+  const [entryError, setEntryError] = useState<string | null>(null)
   const [comment, setComment] = useState(exercise.comment ?? '')
-
-  const toNumber = (v: string) => {
-    if (v.trim() === '') return null
-    const n = Number(v)
-    return Number.isFinite(n) ? n : null
-  }
 
   function clear() {
     setReps('')
     setWeight('')
     setField('reps')
     setEditingSetId(null)
+    setEntryError(null)
   }
 
   function submitSet() {
-    const r = toNumber(reps)
-    const w = toNumber(weight)
-    if (r === null && w === null) return
+    // Same validator as the live session runner — a backfilled set is held to
+    // exactly the same rules as one logged at the time.
+    const { reps: r, weight: w, error } = validateSetEntry(reps, weight)
+    if (error) {
+      setEntryError(error)
+      return
+    }
+    setEntryError(null)
+
     if (editingSetId) {
       const id = editingSetId
       onRun(() => updateSet(id, r, w))
@@ -619,7 +622,12 @@ function EditableExercise({
         weight={weight}
         active={field}
         onActivate={setField}
-        onChange={(f, v) => (f === 'reps' ? setReps(v) : setWeight(v))}
+        error={entryError}
+        onChange={(f, v) => {
+          setEntryError(null)
+          if (f === 'reps') setReps(v)
+          else setWeight(v)
+        }}
       />
 
       <ActionButton tone="primary" className="w-full" onClick={submitSet}>

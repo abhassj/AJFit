@@ -20,6 +20,7 @@ export function NumericEntry({
   onActivate,
   onChange,
   label,
+  error,
 }: {
   reps: string
   weight: string
@@ -27,6 +28,8 @@ export function NumericEntry({
   onActivate: (field: NumericField) => void
   onChange: (field: NumericField, value: string) => void
   label: string
+  /** Shown between the fields and the keypad, where the thumb already is. */
+  error?: string | null
 }) {
   function press(key: string) {
     const current = active === 'reps' ? reps : weight
@@ -63,6 +66,15 @@ export function NumericEntry({
           onClick={() => onActivate('weight')}
         />
       </div>
+
+      {error && (
+        <p
+          role="alert"
+          className="mt-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-center text-[13px] font-medium text-danger"
+        >
+          {error}
+        </p>
+      )}
 
       <div className="mt-4 grid grid-cols-3 gap-2.5">
         {KEYS.map((key) => (

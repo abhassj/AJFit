@@ -190,3 +190,25 @@ export function SwapIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+export function AlertIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7.5v5.5" />
+      <path d="M12 16.5h.01" />
+    </svg>
+  )
+}
+
+export function WifiOffIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M3 3l18 18" />
+      <path d="M8.5 15.5a5 5 0 0 1 7 0" />
+      <path d="M5 12a10 10 0 0 1 3.5-2.3" />
+      <path d="M19 12a10 10 0 0 0-8.5-2.8" />
+      <path d="M12 19h.01" />
+    </svg>
+  )
+}

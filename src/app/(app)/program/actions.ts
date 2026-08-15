@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 import { getOrCreateProgram } from '@/lib/program'
 import {
   DAY_LABELS,
@@ -10,6 +10,11 @@ import {
   type DayOfWeek,
   type DraftDay,
 } from '@/lib/program-types'
+import {
+  parseDayTitle,
+  parseRestSeconds,
+  parseSplitName,
+} from '@/lib/validation'
 
 export type SaveResult = { ok: true } | { ok: false; error: string }
 
@@ -20,14 +25,20 @@ export type SaveResult = { ok: true } | { ok: false; error: string }
  * ids, so reloading never produces a second program. Only program_exercises
  * churn — rows the draft dropped are deleted, rows carrying an id are updated,
  * and new rows are inserted.
+ *
+ * Everything is re-validated here even though the builder validates as you
+ * type. A Server Action is an ordinary HTTP endpoint that anything can post to,
+ * so the browser's checks are a convenience for the user and this pass is the
+ * actual guarantee about what reaches the database.
  */
-export async function saveProgram(days: DraftDay[]): Promise<SaveResult> {
-  const supabase = await createClient()
+export async function saveProgram(
+  name: string,
+  days: DraftDay[],
+): Promise<SaveResult> {
+  const { supabase } = await requireUser()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
+  const parsedName = parseSplitName(name)
+  if (!parsedName.ok) return { ok: false, error: parsedName.error }
 
   const program = await getOrCreateProgram()
   const dayIdByDow = new Map(program.days.map((d) => [d.day_of_week, d.id]))
@@ -37,6 +48,44 @@ export async function saveProgram(days: DraftDay[]): Promise<SaveResult> {
     if (!submitted.has(dow)) {
       return { ok: false, error: `Draft is missing ${dow}.` }
     }
+  }
+
+  // Validate every day and every exercise up front, so a bad value on Saturday
+  // is reported before Monday has already been written.
+  for (const day of days) {
+    const title = parseDayTitle(day.title)
+    if (!title.ok) {
+      return {
+        ok: false,
+        error: `${DAY_LABELS[day.day_of_week]}: ${title.error}`,
+      }
+    }
+    for (const exercise of day.exercises) {
+      if (!exercise.exercise_id) {
+        return {
+          ok: false,
+          error: `${DAY_LABELS[day.day_of_week]} has an exercise with nothing selected.`,
+        }
+      }
+      const rest = parseRestSeconds(
+        exercise.rest_seconds === null ? '' : String(exercise.rest_seconds),
+      )
+      if (!rest.ok) {
+        return {
+          ok: false,
+          error: `${DAY_LABELS[day.day_of_week]}: ${rest.error}`,
+        }
+      }
+    }
+  }
+
+  const { error: nameError } = await supabase
+    .from('programs')
+    .update({ name: parsedName.value })
+    .eq('id', program.id)
+
+  if (nameError) {
+    return { ok: false, error: `Could not save the name: ${nameError.message}` }
   }
 
   const dayResults = await Promise.all(
@@ -212,11 +261,7 @@ export async function copyDay(
     return { ok: false, error: 'Pick a different day to copy from.' }
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not signed in.' }
+  const { supabase } = await requireUser()
 
   const program = await getOrCreateProgram()
   const source = program.days.find((d) => d.day_of_week === fromDayOfWeek)

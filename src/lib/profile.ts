@@ -2,6 +2,7 @@ import 'server-only'
 
 import { cache } from 'react'
 
+import { requireUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
 
 export type Profile = {
@@ -56,12 +57,7 @@ export const getProfile = cache(async (): Promise<Profile | null> => {
 
 /** Everything the Profile page renders. */
 export async function getProfilePageData(): Promise<ProfilePageData> {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in')
+  const { supabase, user } = await requireUser()
 
   const [profile, weight] = await Promise.all([
     getProfile(),

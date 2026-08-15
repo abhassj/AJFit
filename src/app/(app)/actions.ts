@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 
 import { localDateKey } from '@/lib/program-types'
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -15,11 +15,7 @@ export async function logBodyweight(weight: number): Promise<ActionResult> {
     return fail('Enter a weight greater than zero.')
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return fail('Not signed in.')
+  const { supabase, user } = await requireUser()
 
   const { error } = await supabase.from('weight_logs').insert({
     user_id: user.id,
@@ -47,11 +43,7 @@ export async function saveGoalBodyweight(
     return fail('Enter a goal greater than zero.')
   }
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return fail('Not signed in.')
+  const { supabase, user } = await requireUser()
 
   const { error } = await supabase
     .from('profiles')

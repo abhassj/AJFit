@@ -30,6 +30,7 @@ import {
   type WorkoutSession,
 } from '@/lib/session-types'
 import { useNow } from '@/lib/use-now'
+import { validateSetEntry } from '@/lib/validation'
 
 export function SessionRunner({
   session,
@@ -322,6 +323,7 @@ function ExercisePanel({
   const [weight, setWeight] = useState('')
   const [field, setField] = useState<NumericField>('reps')
   const [editingSetId, setEditingSetId] = useState<string | null>(null)
+  const [entryError, setEntryError] = useState<string | null>(null)
   const [comment, setComment] = useState(exercise.comment ?? '')
   const [showComment, setShowComment] = useState(!!exercise.comment)
 
@@ -334,23 +336,28 @@ function ExercisePanel({
   const [restStartedAt, setRestStartedAt] = useState<number | null>(null)
   const [offerRest, setOfferRest] = useState(false)
 
-  const toNumber = (value: string) => {
-    if (value.trim() === '') return null
-    const n = Number(value)
-    return Number.isFinite(n) ? n : null
-  }
-
   function clear() {
     setReps('')
     setWeight('')
     setField('reps')
     setEditingSetId(null)
+    setEntryError(null)
   }
 
   function handleDone() {
-    const r = toNumber(reps)
-    const w = toNumber(weight)
-    if (r === null && w === null) return
+    /*
+     * Previously this read `Number(value)` and bailed silently when both fields
+     * were empty, so tapping Log Set with nothing entered did nothing at all
+     * and gave no reason. It also let a bare `0` through as zero reps. Both go
+     * through the shared validator now, and the failure is shown rather than
+     * swallowed.
+     */
+    const { reps: r, weight: w, error } = validateSetEntry(reps, weight)
+    if (error) {
+      setEntryError(error)
+      return
+    }
+    setEntryError(null)
 
     if (editingSetId) {
       const id = editingSetId
@@ -425,7 +432,13 @@ function ExercisePanel({
           weight={weight}
           active={field}
           onActivate={setField}
-          onChange={(f, v) => (f === 'reps' ? setReps(v) : setWeight(v))}
+          error={entryError}
+          onChange={(f, v) => {
+            // Clear the message as soon as they start correcting it.
+            setEntryError(null)
+            if (f === 'reps') setReps(v)
+            else setWeight(v)
+          }}
         />
       </div>
 

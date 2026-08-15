@@ -57,6 +57,29 @@ export function TripleActionRow({ children }: { children: ReactNode }) {
   return <div className="grid grid-cols-3 gap-2.5">{children}</div>
 }
 
+/**
+ * The inline message under an invalid field.
+ *
+ * `role="alert"` rather than a plain paragraph: validation messages appear
+ * after the user has moved on from the field, so a screen reader needs to be
+ * interrupted to hear about it. The red border on the control alone is not an
+ * accessible signal — colour is never the only carrier of meaning here.
+ */
+function FieldError({ id, children }: { id: string; children: string }) {
+  return (
+    <span
+      id={id}
+      role="alert"
+      className="mt-1.5 block text-[12px] leading-snug font-medium text-danger"
+    >
+      {children}
+    </span>
+  )
+}
+
+/** Border and ring treatment shared by every invalid control. */
+const INVALID_RING = 'border-danger/70 ring-1 ring-danger/30'
+
 export function Select({
   label,
   value,
@@ -64,6 +87,8 @@ export function Select({
   options,
   placeholder,
   disabled,
+  error,
+  id,
 }: {
   label: string
   value: string
@@ -71,15 +96,23 @@ export function Select({
   options: { id: string; name: string }[]
   placeholder: string
   disabled?: boolean
+  error?: string | null
+  id?: string
 }) {
+  const errorId = id ? `${id}-error` : undefined
+
   return (
     <label className="block">
       <span className="label-caps">{label}</span>
       <select
         value={value}
         disabled={disabled}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 min-h-[46px] w-full rounded-xl border border-hairline bg-card-raised px-3 text-[15px] text-primary disabled:opacity-40"
+        className={`mt-1.5 min-h-[46px] w-full rounded-xl border bg-card-raised px-3 text-[15px] text-primary disabled:opacity-40 ${
+          error ? INVALID_RING : 'border-hairline'
+        }`}
       >
         <option value="">{placeholder}</option>
         {options.map((o) => (
@@ -88,6 +121,7 @@ export function Select({
           </option>
         ))}
       </select>
+      {error && <FieldError id={errorId ?? ''}>{error}</FieldError>}
     </label>
   )
 }
@@ -98,13 +132,21 @@ export function TextField({
   onChange,
   placeholder,
   inputMode,
+  error,
+  id,
+  maxLength,
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   placeholder?: string
   inputMode?: 'text' | 'numeric' | 'decimal'
+  error?: string | null
+  id?: string
+  maxLength?: number
 }) {
+  const errorId = id ? `${id}-error` : undefined
+
   return (
     <label className="block">
       <span className="label-caps">{label}</span>
@@ -113,9 +155,17 @@ export function TextField({
         value={value}
         inputMode={inputMode}
         placeholder={placeholder}
+        // A hard cap on the input beats validating an over-long string after
+        // the fact — the field simply stops accepting characters.
+        maxLength={maxLength}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 min-h-[46px] w-full rounded-xl border border-hairline bg-card-raised px-3 text-[15px] text-primary placeholder:text-faint"
+        className={`mt-1.5 min-h-[46px] w-full rounded-xl border bg-card-raised px-3 text-[15px] text-primary placeholder:text-faint ${
+          error ? INVALID_RING : 'border-hairline'
+        }`}
       />
+      {error && <FieldError id={errorId ?? ''}>{error}</FieldError>}
     </label>
   )
 }

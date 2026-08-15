@@ -1,8 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { unstable_rethrow } from 'next/navigation'
 
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 import { getOrCreateProgram } from '@/lib/program'
 import {
   DAY_LABELS,
@@ -16,15 +17,6 @@ import { intervalToSeconds, secondsToInterval } from '@/lib/session-types'
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
 const fail = (error: string): ActionResult => ({ ok: false, error })
-
-async function requireUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in')
-  return { supabase, user }
-}
 
 function refresh() {
   revalidatePath('/start')
@@ -98,6 +90,10 @@ export async function startSession(
     refresh()
     return { ok: true }
   } catch (e) {
+    // requireUser() redirects an expired session, and redirect() signals by
+    // throwing. Without this the catch would swallow it and report the
+    // framework's internal marker as a failed save.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -131,6 +127,10 @@ export async function skipDay(): Promise<ActionResult> {
     refresh()
     return { ok: true }
   } catch (e) {
+    // requireUser() redirects an expired session, and redirect() signals by
+    // throwing. Without this the catch would swallow it and report the
+    // framework's internal marker as a failed save.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -167,6 +167,10 @@ export async function logSet(
     refresh()
     return { ok: true }
   } catch (e) {
+    // requireUser() redirects an expired session, and redirect() signals by
+    // throwing. Without this the catch would swallow it and report the
+    // framework's internal marker as a failed save.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -189,6 +193,10 @@ export async function updateSet(
     refresh()
     return { ok: true }
   } catch (e) {
+    // requireUser() redirects an expired session, and redirect() signals by
+    // throwing. Without this the catch would swallow it and report the
+    // framework's internal marker as a failed save.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -217,6 +225,10 @@ export async function setExerciseStatus(
     refresh()
     return { ok: true }
   } catch (e) {
+    // requireUser() redirects an expired session, and redirect() signals by
+    // throwing. Without this the catch would swallow it and report the
+    // framework's internal marker as a failed save.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -237,6 +249,10 @@ export async function saveComment(
     refresh()
     return { ok: true }
   } catch (e) {
+    // requireUser() redirects an expired session, and redirect() signals by
+    // throwing. Without this the catch would swallow it and report the
+    // framework's internal marker as a failed save.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -282,6 +298,10 @@ export async function addPausedSeconds(
     refresh()
     return { ok: true }
   } catch (e) {
+    // requireUser() redirects an expired session, and redirect() signals by
+    // throwing. Without this the catch would swallow it and report the
+    // framework's internal marker as a failed save.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }
@@ -308,6 +328,10 @@ export async function finishSession(
     refresh()
     return { ok: true }
   } catch (e) {
+    // requireUser() redirects an expired session, and redirect() signals by
+    // throwing. Without this the catch would swallow it and report the
+    // framework's internal marker as a failed save.
+    unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
 }

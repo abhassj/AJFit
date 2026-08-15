@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/auth'
 import {
   DAYS_OF_WEEK,
   type DayOfWeek,
@@ -99,12 +99,7 @@ function shapeProgram(row: {
  * place and history lives in the sessions log instead (PRD §8.3).
  */
 export async function getOrCreateProgram(): Promise<Program> {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not signed in')
+  const { supabase, user } = await requireUser()
 
   const { data: existing, error: readError } = await supabase
     .from('programs')
