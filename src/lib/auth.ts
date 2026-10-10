@@ -1,9 +1,31 @@
 import 'server-only'
 
 import { redirect } from 'next/navigation'
+import { cache } from 'react'
 import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 
 import { createClient } from '@/lib/supabase/server'
+
+/**
+ * One getUser() per request, shared by everything that renders in it.
+ *
+ * getUser() is a network round trip to the auth server, and a single page
+ * render used to make several: the layout, getProfile() and each data module
+ * all asked independently. Measured on the Start screen that was 15 auth calls
+ * per tap — each one a trip across the Pacific when the function and the
+ * database sit in different regions. Memoising per request keeps exactly one.
+ *
+ * The client travels with it so every query in the request shares one
+ * cookie-backed session.
+ */
+export const getAuthUser = cache(async () => {
+  const supabase = await createClient()
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+  return { supabase, user, error }
+})
 
 /**
  * Resolves the signed-in user, or sends an expired session to /sign-in.
@@ -24,11 +46,7 @@ import { createClient } from '@/lib/supabase/server'
  * through — see `unstable_rethrow` at the top of the action catch blocks.
  */
 export async function requireUser() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser()
+  const { supabase, user, error } = await getAuthUser()
 
   /*
    * Same distinction the proxy makes, and it has to be made here too because
@@ -47,4 +65,32 @@ export async function requireUser() {
   if (!user) redirect('/sign-in')
 
   return { supabase, user }
+}
+
+/**
+ * For Server Actions on the logging hot path, which only write rows the caller
+ * already owns and never need to know who the caller is.
+ *
+ * requireUser() costs a round trip to the auth server before the write can
+ * even start. Here that check is redundant: PostgREST verifies the JWT on the
+ * write itself and RLS decides whether the row is the caller's, so a forged or
+ * expired token is refused by the database either way. What remains is the
+ * user-facing part — sending someone whose session is gone back to sign-in
+ * instead of reporting a failed save — and that only needs the local session,
+ * which getSession() reads from the cookie (refreshing it when it has expired,
+ * which is the only case that touches the network).
+ *
+ * Do not use this where the action reads user.id or trusts the session's
+ * contents for anything other than "is there one".
+ */
+export async function requireSession() {
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.getSession()
+
+  if (error && isAuthRetryableFetchError(error)) {
+    throw new Error('Could not reach the authentication server.')
+  }
+  if (!data.session) redirect('/sign-in')
+
+  return { supabase }
 }

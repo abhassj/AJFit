@@ -5,8 +5,10 @@ import { AppHeader } from '@/components/app-header'
 import { BottomNav } from '@/components/bottom-nav'
 import { MotionProvider } from '@/components/motion'
 import { TimezoneSync } from '@/components/timezone-sync'
+import { UnitsProvider } from '@/components/units-provider'
+import { getAuthUser } from '@/lib/auth'
 import { getProfile } from '@/lib/profile'
-import { createClient } from '@/lib/supabase/server'
+import { DEFAULT_UNITS } from '@/lib/units'
 
 /**
  * Shell for every signed-in page: ambient backdrop, a slim header carrying the
@@ -18,10 +20,7 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { user } = await getAuthUser()
 
   /*
    * The profile is decoration here — it supplies the avatar image and the name
@@ -68,7 +67,15 @@ export default async function AppLayout({
             email={user.email ?? ''}
           />
         )}
-        {children}
+        <UnitsProvider
+          units={
+            profile
+              ? { weight: profile.weight_unit, height: profile.height_unit }
+              : DEFAULT_UNITS
+          }
+        >
+          {children}
+        </UnitsProvider>
       </div>
       <BottomNav />
     </MotionProvider>
