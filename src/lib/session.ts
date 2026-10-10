@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { requireUser } from '@/lib/auth'
+import type { DayOfWeek } from '@/lib/program-types'
 import {
   intervalToSeconds,
   type SessionExercise,
@@ -8,24 +9,35 @@ import {
 } from '@/lib/session-types'
 import { getViewerDateKey } from '@/lib/viewer-time'
 
+/*
+ * The workout's title comes from the session's own program_day — the day the
+ * user chose to run — never from today's weekday. Deriving it from the weekday
+ * is what put "Back & Biceps" over a Shoulders & Legs session whenever someone
+ * ran a different day's workout.
+ *
+ * Likewise the exercise name comes from the session_exercise's own snapshot
+ * (exercise_id), not from whatever the program slot holds now.
+ */
 const SESSION_SELECT = `
   id,
+  program_day_id,
   session_date,
   status,
   start_time,
   end_time,
   paused_duration,
+  program_days ( title, day_of_week ),
   session_exercises (
     id,
     program_exercise_id,
     status,
     completed_at,
     comment,
+    exercises ( name ),
     program_exercises (
       exercise_order,
       prescribed_reps,
-      rest_seconds,
-      exercises ( name )
+      rest_seconds
     ),
     sets ( id, set_number, reps_done, weight )
   )
@@ -37,11 +49,11 @@ type RawSessionExercise = {
   status: SessionExercise['status']
   completed_at: string | null
   comment: string | null
+  exercises: { name: string } | null
   program_exercises: {
     exercise_order: number
     prescribed_reps: string | null
     rest_seconds: number | null
-    exercises: { name: string } | null
   } | null
   sets: {
     id: string
@@ -53,6 +65,8 @@ type RawSessionExercise = {
 
 function shapeSession(row: {
   id: string
+  program_day_id: string | null
+  program_days: { title: string | null; day_of_week: DayOfWeek } | null
   session_date: string
   status: WorkoutSession['status']
   start_time: string | null
@@ -62,6 +76,9 @@ function shapeSession(row: {
 }): WorkoutSession {
   return {
     id: row.id,
+    program_day_id: row.program_day_id,
+    day_title: row.program_days?.title?.trim() || null,
+    day_of_week: row.program_days?.day_of_week ?? null,
     session_date: row.session_date,
     status: row.status,
     start_time: row.start_time,
@@ -74,7 +91,7 @@ function shapeSession(row: {
         status: se.status,
         completed_at: se.completed_at,
         comment: se.comment,
-        exercise_name: se.program_exercises?.exercises?.name ?? 'Exercise',
+        exercise_name: se.exercises?.name ?? 'Exercise',
         prescribed_reps: se.program_exercises?.prescribed_reps ?? null,
         rest_seconds: se.program_exercises?.rest_seconds ?? null,
         exercise_order: se.program_exercises?.exercise_order ?? 0,

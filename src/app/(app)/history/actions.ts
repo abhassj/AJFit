@@ -1,7 +1,15 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { refresh as refreshPage, revalidatePath } from 'next/cache'
 import { unstable_rethrow } from 'next/navigation'
+
+import {
+  logSet,
+  saveComment,
+  setExerciseStatus,
+  updateSet,
+  type ActionResult as StartActionResult,
+} from '@/app/(app)/start/actions'
 
 import { getOrCreateProgram } from '@/lib/program'
 import { DAY_LABELS, DAYS_OF_WEEK, type DayOfWeek } from '@/lib/program-types'
@@ -138,4 +146,50 @@ export async function deleteSession(
     unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
+}
+
+/*
+ * Editing a logged day reuses the live session's write actions. Those no
+ * longer re-render anything — the live runner keeps its own client state — but
+ * this editor renders straight from the server, so each edit here refreshes
+ * the page it was made on.
+ */
+
+async function thenRefresh(result: StartActionResult): Promise<ActionResult> {
+  if (result.ok) refreshPage()
+  return result
+}
+
+export async function editLogSet(
+  setId: string,
+  sessionExerciseId: string,
+  setNumber: number,
+  reps: number | null,
+  weight: number | null,
+): Promise<ActionResult> {
+  return thenRefresh(
+    await logSet(setId, sessionExerciseId, setNumber, reps, weight),
+  )
+}
+
+export async function editUpdateSet(
+  setId: string,
+  reps: number | null,
+  weight: number | null,
+): Promise<ActionResult> {
+  return thenRefresh(await updateSet(setId, reps, weight))
+}
+
+export async function editExerciseStatus(
+  sessionExerciseId: string,
+  status: 'completed' | 'skipped' | 'pending',
+): Promise<ActionResult> {
+  return thenRefresh(await setExerciseStatus(sessionExerciseId, status))
+}
+
+export async function editComment(
+  sessionExerciseId: string,
+  comment: string,
+): Promise<ActionResult> {
+  return thenRefresh(await saveComment(sessionExerciseId, comment))
 }

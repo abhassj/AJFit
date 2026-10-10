@@ -19,6 +19,21 @@ function isPublicPath(pathname: string) {
  * /sign-in.
  */
 export async function updateSession(request: NextRequest) {
+  /*
+   * Server Actions authenticate themselves.
+   *
+   * Every action starts with requireUser() or requireSession(), which refresh
+   * an expired token and write the rotated cookies on the action's own
+   * response (actions may set cookies; Server Components may not, which is why
+   * page renders do need this proxy). Running getUser() here as well added a
+   * full auth round trip in front of every tap on the Start screen, to learn
+   * something the action is about to establish anyway — and a redirect issued
+   * from here is not something an action call can follow usefully.
+   */
+  if (request.method === 'POST' && request.headers.has('next-action')) {
+    return NextResponse.next({ request })
+  }
+
   let response = NextResponse.next({ request })
 
   const { url, anonKey } = getSupabaseEnv()

@@ -9,6 +9,7 @@ import { UnitsProvider } from '@/components/units-provider'
 import { getAuthUser } from '@/lib/auth'
 import { getProfile } from '@/lib/profile'
 import { DEFAULT_UNITS } from '@/lib/units'
+import { getViewerTimeZone } from '@/lib/viewer-time'
 
 /**
  * Shell for every signed-in page: ambient backdrop, a slim header carrying the
@@ -56,7 +57,7 @@ export default async function AppLayout({
        * date-sensitive screen lives under it, and it must be present before the
        * first date is rendered rather than per-page.
        */}
-      <TimezoneSync />
+      <TimezoneSync serverZone={await getViewerTimeZone()} />
       <AppBackground />
       {/* Bottom padding clears the fixed nav, including the iOS home indicator. */}
       <div className="mx-auto min-h-dvh w-full max-w-lg pb-[calc(5.5rem+env(safe-area-inset-bottom))]">

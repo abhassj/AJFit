@@ -14,14 +14,12 @@ export default suite(
   {
     async 'a profile row can be created by upsert and read back'() {
       must(
-        await user.client
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            display_name: 'Tester',
-            motto: 'Lift',
-            goal_bodyweight: 75,
-          }),
+        await user.client.from('profiles').upsert({
+          id: user.id,
+          display_name: 'Tester',
+          motto: 'Lift',
+          goal_bodyweight: 75,
+        }),
       )
       const row = must(
         await user.client

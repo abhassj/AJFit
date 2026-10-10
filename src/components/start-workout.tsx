@@ -7,7 +7,9 @@ import { CheckIcon, PlayIcon, RestIcon, SkipIcon } from '@/components/icons'
 import { ActionButton, Banner } from '@/components/ui'
 import { ProgramDayPicker } from '@/components/program-day-picker'
 import { DAY_LABELS, type DayOfWeek, type Program } from '@/lib/program-types'
+import { useUnits } from '@/components/units-provider'
 import { formatClockTime, formatDuration } from '@/lib/session-types'
+import { displayWeight } from '@/lib/units'
 import type { WorkoutSession } from '@/lib/session-types'
 
 /** Pre-session screen: confirm and start, or explicitly skip the whole day. */
@@ -21,7 +23,15 @@ export function StartWorkout({
   dayLabel: string
 }) {
   const [confirming, setConfirming] = useState(false)
-  const [selectedDow, setSelectedDow] = useState<DayOfWeek>(todayDow)
+  /*
+   * Only an explicit choice is held in state. Copying todayDow into state was
+   * the bug: on a first visit the server renders with UTC, TimezoneSync then
+   * refreshes with the real zone, and the new todayDow prop never reached a
+   * useState that had already been initialised — so the heading and the
+   * session started from it stayed on UTC's weekday.
+   */
+  const [chosenDow, setChosenDow] = useState<DayOfWeek | null>(null)
+  const selectedDow = chosenDow ?? todayDow
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -59,7 +69,7 @@ export function StartWorkout({
             program={program}
             selected={selectedDow}
             defaultDay={todayDow}
-            onSelect={setSelectedDow}
+            onSelect={setChosenDow}
             disabled={pending}
           />
         </div>
@@ -91,8 +101,8 @@ export function StartWorkout({
 
       {day.exercises.length === 0 ? (
         <p className="surface rounded-2xl px-5 py-6 text-center text-sm text-secondary">
-          Nothing scheduled for {dayLabel}. Add exercises in the Program builder
-          first.
+          Nothing scheduled for {DAY_LABELS[selectedDow]}. Add exercises in My
+          Workout Split first.
         </p>
       ) : (
         <div className="surface overflow-hidden rounded-2xl">
@@ -125,7 +135,7 @@ export function StartWorkout({
         program={program}
         selected={selectedDow}
         defaultDay={todayDow}
-        onSelect={setSelectedDow}
+        onSelect={setChosenDow}
         disabled={pending}
       />
 
@@ -143,7 +153,7 @@ export function StartWorkout({
               <ActionButton
                 tone="danger"
                 disabled={pending}
-                onClick={() => run(() => startSession(selectedDow))}
+                onClick={() => run(() => startSession(day.id))}
               >
                 {pending ? 'Starting…' : 'Confirm Start'}
               </ActionButton>
@@ -182,11 +192,13 @@ export function StartWorkout({
 /** Post-session summary, shown once a day has been completed or skipped. */
 export function SessionSummary({
   session,
-  dayLabel,
+  heading,
 }: {
   session: WorkoutSession
-  dayLabel: string
+  /** The title of the day this session followed. */
+  heading: string
 }) {
+  const { weight: unit } = useUnits()
   const skipped = session.status === 'skipped'
   const durationSeconds =
     session.start_time && session.end_time
@@ -220,7 +232,7 @@ export function SessionSummary({
           {skipped ? 'Day Skipped' : 'Workout Complete'}
         </h1>
         <p className="mt-1.5 text-sm text-secondary">
-          {dayLabel} · {session.session_date}
+          {heading} · {session.session_date}
         </p>
       </header>
 
@@ -241,7 +253,7 @@ export function SessionSummary({
 
       {skipped && (
         <p className="surface rounded-2xl px-5 py-6 text-center text-sm text-secondary">
-          You marked {dayLabel} as skipped. No sets were logged.
+          You marked today as skipped. No sets were logged.
         </p>
       )}
 
@@ -279,9 +291,11 @@ export function SessionSummary({
                         <p className="mt-1 text-[13px] text-faint tabular-nums">
                           {exercise.sets
                             .map(
-                              (s) => `${s.reps_done ?? '—'}×${s.weight ?? '—'}`,
+                              (s) =>
+                                `${s.reps_done ?? '—'}×${s.weight == null ? '—' : displayWeight(s.weight, unit)}`,
                             )
-                            .join('  ·  ')}
+                            .join('  ·  ')}{' '}
+                          {unit}
                         </p>
                       )}
                       {exercise.comment && (

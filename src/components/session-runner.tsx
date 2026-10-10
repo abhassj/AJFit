@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, m, useReducedMotion } from 'framer-motion'
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 
 import {
   addPausedSeconds,
@@ -22,15 +22,51 @@ import {
 import { NumericEntry, type NumericField } from '@/components/numeric-keypad'
 import { RestTimer } from '@/components/rest-timer'
 import { ActionButton, Banner, TripleActionRow } from '@/components/ui'
+import { useUnits } from '@/components/units-provider'
+import { newId } from '@/lib/id'
 import {
   elapsedSeconds,
   formatClockTime,
   formatDuration,
   type SessionExercise,
+  type SessionExerciseStatus,
   type WorkoutSession,
 } from '@/lib/session-types'
+import { displayWeight, toKg, type WeightUnit } from '@/lib/units'
 import { useNow } from '@/lib/use-now'
+import { useWriteQueue, type SaveState } from '@/lib/use-write-queue'
 import { validateSetEntry } from '@/lib/validation'
+
+/*
+ * ============================================================================
+ * Client state is the source of truth while a session is on screen.
+ * ============================================================================
+ * Every tap updates `exercises` here first and the screen answers at once; the
+ * matching server write is queued behind it (src/lib/use-write-queue.ts) and
+ * saves in the background, in order. Nothing in the tap path waits on the
+ * network or re-renders the page from the server — that round trip is what
+ * made logging feel slow.
+ *
+ * The server's copy (the `session` prop) seeds this state once. It is not
+ * re-read mid-session, so a background re-render of the page can never snap
+ * the screen back to an older version of what the user just did.
+ */
+
+type Handlers = {
+  logSet: (
+    exerciseId: string,
+    reps: number | null,
+    weightKg: number | null,
+  ) => void
+  updateSet: (
+    exerciseId: string,
+    setId: string,
+    reps: number | null,
+    weightKg: number | null,
+  ) => void
+  setStatus: (exerciseId: string, status: SessionExerciseStatus) => void
+  saveComment: (exerciseId: string, comment: string) => void
+}
 
 export function SessionRunner({
   session,
@@ -39,12 +75,31 @@ export function SessionRunner({
   session: WorkoutSession
   dayTitle: string
 }) {
+  const [exercises, setExercises] = useState<SessionExercise[]>(
+    session.exercises,
+  )
+  /*
+   * The latest exercises, for handlers that may be called from a stale render.
+   * When an exercise is completed its panel animates out for ~220ms, and its
+   * buttons are still under the thumb during that exit: a quick second tap on
+   * "Skip Exercise" would otherwise land on the exercise that was just
+   * completed. Handlers check the live status here and ignore those taps.
+   *
+   * Every change goes through patch(), which updates this ref and the state
+   * together, so the two never disagree.
+   */
+  const latest = useRef(session.exercises)
+  const isPending = (id: string) =>
+    latest.current.find((e) => e.id === id)?.status === 'pending'
+  const [pausedSeconds, setPausedSeconds] = useState(session.paused_seconds)
   const [pausedSince, setPausedSince] = useState<string | null>(null)
   const [activeId, setActiveId] = useState<string | null>(
     session.exercises.find((e) => e.status === 'pending')?.id ?? null,
   )
   const [error, setError] = useState<string | null>(null)
+  const [finishing, setFinishing] = useState(false)
   const [, startTransition] = useTransition()
+  const queue = useWriteQueue()
 
   const reduced = useReducedMotion()
 
@@ -55,40 +110,70 @@ export function SessionRunner({
     () =>
       now === 0
         ? 0
-        : elapsedSeconds(
-            session.start_time,
-            session.paused_seconds,
-            pausedSince,
-            now,
-          ),
-    [session.start_time, session.paused_seconds, pausedSince, now],
+        : elapsedSeconds(session.start_time, pausedSeconds, pausedSince, now),
+    [session.start_time, pausedSeconds, pausedSince, now],
   )
 
   /*
    * The panel follows the selected exercise only while it is still pending.
    * Once it is completed or skipped it drops out and the next pending one takes
    * over, so logging never silently keeps writing to an exercise the user has
-   * already closed out. Falling through like this avoids an effect that would
-   * have to chase the server state after every revalidation.
+   * already closed out.
    */
   const active =
-    session.exercises.find(
-      (e) => e.id === activeId && e.status === 'pending',
-    ) ??
-    session.exercises.find((e) => e.status === 'pending') ??
+    exercises.find((e) => e.id === activeId && e.status === 'pending') ??
+    exercises.find((e) => e.status === 'pending') ??
     null
   // "Up Next" is everything still pending other than the one on screen.
-  const remaining = session.exercises.filter(
+  const remaining = exercises.filter(
     (e) => e.status === 'pending' && e.id !== active?.id,
   )
-  const logged = session.exercises.filter((e) => e.status !== 'pending')
+  const logged = exercises.filter((e) => e.status !== 'pending')
 
-  function run(fn: () => Promise<{ ok: true } | { ok: false; error: string }>) {
-    setError(null)
-    startTransition(async () => {
-      const result = await fn()
-      if (!result.ok) setError(result.error)
-    })
+  function patch(id: string, fn: (e: SessionExercise) => SessionExercise) {
+    latest.current = latest.current.map((e) => (e.id === id ? fn(e) : e))
+    setExercises(latest.current)
+  }
+
+  const handlers: Handlers = {
+    logSet(exerciseId, reps, weightKg) {
+      const exercise = latest.current.find((e) => e.id === exerciseId)
+      if (!exercise || exercise.status !== 'pending') return
+      const set = {
+        id: newId(),
+        set_number: Math.max(0, ...exercise.sets.map((s) => s.set_number)) + 1,
+        reps_done: reps,
+        weight: weightKg,
+      }
+      patch(exerciseId, (e) => ({ ...e, sets: [...e.sets, set] }))
+      queue.enqueue(`Set ${set.set_number}`, () =>
+        logSet(set.id, exerciseId, set.set_number, reps, weightKg),
+      )
+    },
+    updateSet(exerciseId, setId, reps, weightKg) {
+      patch(exerciseId, (e) => ({
+        ...e,
+        sets: e.sets.map((s) =>
+          s.id === setId ? { ...s, reps_done: reps, weight: weightKg } : s,
+        ),
+      }))
+      queue.enqueue('Set correction', () => updateSet(setId, reps, weightKg))
+    },
+    setStatus(exerciseId, status) {
+      if (!isPending(exerciseId)) return
+      const completedAt = status === 'pending' ? null : new Date().toISOString()
+      patch(exerciseId, (e) => ({ ...e, status, completed_at: completedAt }))
+      queue.enqueue(status === 'skipped' ? 'Skip' : 'Completion', () =>
+        setExerciseStatus(exerciseId, status),
+      )
+    },
+    saveComment(exerciseId, comment) {
+      const exercise = latest.current.find((e) => e.id === exerciseId)
+      const next = comment.trim() || null
+      if (!exercise || exercise.comment === next) return
+      patch(exerciseId, (e) => ({ ...e, comment: next }))
+      queue.enqueue('Comment', () => saveComment(exerciseId, comment))
+    },
   }
 
   function handlePause() {
@@ -102,25 +187,59 @@ export function SessionRunner({
       (Date.now() - new Date(pausedSince).getTime()) / 1000,
     )
     setPausedSince(null)
-    run(() => addPausedSeconds(session.id, elapsed))
+    setPausedSeconds((s) => s + elapsed)
+    queue.enqueue('Pause', () => addPausedSeconds(session.id, elapsed))
   }
 
-  function handleFinish() {
+  async function handleFinish() {
+    if (finishing) return
     const trailing = pausedSince
       ? Math.floor((Date.now() - new Date(pausedSince).getTime()) / 1000)
       : 0
+    setError(null)
+    setFinishing(true)
+
+    // Every queued write must land before the session is closed, or the
+    // summary would be rendered from a log that is still missing sets.
+    const saved = await queue.flush()
+    if (!saved) {
+      setFinishing(false)
+      setError('Some changes have not saved yet. Retry them, then finish.')
+      return
+    }
+
     setPausedSince(null)
-    run(() => finishSession(session.id, trailing))
+    startTransition(async () => {
+      try {
+        const result = await finishSession(session.id, trailing)
+        if (!result.ok) {
+          setError(result.error)
+          setFinishing(false)
+        }
+      } catch {
+        setError(
+          'Could not reach the server. Check your connection and try again.',
+        )
+        setFinishing(false)
+      }
+    })
   }
 
   return (
     <main className="px-4 pt-2 pb-4">
-      <header className="px-1 pb-5">
-        <p className="label-caps">Logging Session</p>
-        <h1 className="mt-1.5 text-[26px] leading-tight font-bold tracking-tight text-primary">
-          {dayTitle}
-        </h1>
+      <header className="flex items-start gap-3 px-1 pb-5">
+        <div className="min-w-0 flex-1">
+          <p className="label-caps">Logging Session</p>
+          <h1 className="mt-1.5 text-[26px] leading-tight font-bold tracking-tight text-primary">
+            {dayTitle}
+          </h1>
+        </div>
+        <SaveIndicator state={queue.state} />
       </header>
+
+      {queue.state.status === 'failed' && (
+        <SaveFailed state={queue.state} onRetry={queue.retry} />
+      )}
 
       {error && (
         <div className="mb-4">
@@ -145,17 +264,27 @@ export function SessionRunner({
 
         <div className="mt-4">
           <TripleActionRow>
-            <ActionButton onClick={handlePause} disabled={!!pausedSince}>
+            <ActionButton
+              onClick={handlePause}
+              disabled={!!pausedSince || finishing}
+            >
               <PauseIcon className="h-5 w-5" />
               Pause
             </ActionButton>
-            <ActionButton onClick={handleResume} disabled={!pausedSince}>
+            <ActionButton
+              onClick={handleResume}
+              disabled={!pausedSince || finishing}
+            >
               <PlayIcon className="h-5 w-5" />
               Resume
             </ActionButton>
-            <ActionButton tone="danger" onClick={handleFinish}>
+            <ActionButton
+              tone="danger"
+              onClick={handleFinish}
+              disabled={finishing}
+            >
               <CheckIcon className="h-5 w-5" />
-              Finish
+              {finishing ? 'Finishing…' : 'Finish'}
             </ActionButton>
           </TripleActionRow>
         </div>
@@ -179,9 +308,7 @@ export function SessionRunner({
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.18}
               onDragEnd={(_, info) => {
-                const pending = session.exercises.filter(
-                  (e) => e.status === 'pending',
-                )
+                const pending = exercises.filter((e) => e.status === 'pending')
                 const at = pending.findIndex((e) => e.id === active.id)
                 if (info.offset.x < -60 && at < pending.length - 1) {
                   setActiveId(pending[at + 1].id)
@@ -192,11 +319,10 @@ export function SessionRunner({
             >
               <ExercisePanel
                 exercise={active}
-                index={
-                  session.exercises.findIndex((e) => e.id === active.id) + 1
-                }
-                total={session.exercises.length}
-                onRun={run}
+                index={exercises.findIndex((e) => e.id === active.id) + 1}
+                total={exercises.length}
+                handlers={handlers}
+                disabled={finishing}
               />
             </m.div>
           </AnimatePresence>
@@ -255,8 +381,63 @@ export function SessionRunner({
   )
 }
 
+/**
+ * Quiet while everything is saved; "Saving…" while the queue drains. Failures
+ * get the pinned alert below instead, because they need a tap.
+ */
+function SaveIndicator({ state }: { state: SaveState }) {
+  if (state.status !== 'saving') return null
+  return (
+    <p
+      role="status"
+      className="label-caps mt-1 shrink-0 animate-pulse text-faint"
+    >
+      Saving…
+    </p>
+  )
+}
+
+function SaveFailed({
+  state,
+  onRetry,
+}: {
+  state: Extract<SaveState, { status: 'failed' }>
+  onRetry: () => void
+}) {
+  /*
+   * Pinned just above the bottom navigation rather than placed in the page
+   * flow: mid-set the page is scrolled down to the keypad, and an alert at the
+   * top of the page would be off screen — a failure nobody sees is a silent
+   * one. Opaque, so it stays legible over whatever scrolls beneath it.
+   */
+  return (
+    <div
+      role="alert"
+      className="fixed inset-x-0 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] z-50 mx-auto flex w-[calc(100%-2rem)] max-w-md items-center gap-3 rounded-xl border border-danger/50 bg-card px-4 py-3 shadow-2xl"
+    >
+      <p className="min-w-0 flex-1 text-sm leading-snug text-danger">
+        {state.label} didn’t save
+        {state.pending > 1 ? ` (${state.pending} changes waiting)` : ''}.{' '}
+        <span className="text-secondary">{state.error}</span>
+      </p>
+      <ActionButton tone="danger" onClick={onRetry} className="shrink-0">
+        Retry
+      </ActionButton>
+    </div>
+  )
+}
+
+function formatSet(
+  set: { reps_done: number | null; weight: number | null },
+  unit: WeightUnit,
+) {
+  const weight = set.weight == null ? '—' : displayWeight(set.weight, unit)
+  return `${set.reps_done ?? '—'}×${weight}`
+}
+
 /** The design doc's completed-item log: checkmark, name, timestamp. */
 function SessionLog({ exercises }: { exercises: SessionExercise[] }) {
+  const { weight: unit } = useUnits()
   return (
     <section className="mt-3">
       <h2 className="label-caps px-1 pb-2">Session Log</h2>
@@ -287,8 +468,9 @@ function SessionLog({ exercises }: { exercises: SessionExercise[] }) {
                   {exercise.sets.length > 0 && (
                     <p className="mt-1 text-[13px] text-faint tabular-nums">
                       {exercise.sets
-                        .map((s) => `${s.reps_done ?? '—'}×${s.weight ?? '—'}`)
-                        .join('  ·  ')}
+                        .map((s) => formatSet(s, unit))
+                        .join('  ·  ')}{' '}
+                      {unit}
                     </p>
                   )}
                   {exercise.comment && (
@@ -310,15 +492,16 @@ function ExercisePanel({
   exercise,
   index,
   total,
-  onRun,
+  handlers,
+  disabled,
 }: {
   exercise: SessionExercise
   index: number
   total: number
-  onRun: (
-    fn: () => Promise<{ ok: true } | { ok: false; error: string }>,
-  ) => void
+  handlers: Handlers
+  disabled: boolean
 }) {
+  const { weight: unit } = useUnits()
   const [reps, setReps] = useState('')
   const [weight, setWeight] = useState('')
   const [field, setField] = useState<NumericField>('reps')
@@ -345,13 +528,8 @@ function ExercisePanel({
   }
 
   function handleDone() {
-    /*
-     * Previously this read `Number(value)` and bailed silently when both fields
-     * were empty, so tapping Log Set with nothing entered did nothing at all
-     * and gave no reason. It also let a bare `0` through as zero reps. Both go
-     * through the shared validator now, and the failure is shown rather than
-     * swallowed.
-     */
+    // The shared validator rejects blank-and-blank and stray zeros, and the
+    // failure is shown rather than swallowed.
     const { reps: r, weight: w, error } = validateSetEntry(reps, weight)
     if (error) {
       setEntryError(error)
@@ -359,11 +537,13 @@ function ExercisePanel({
     }
     setEntryError(null)
 
+    // Typed in the user's unit, stored in kilograms (src/lib/units.ts).
+    const kg = w == null ? null : toKg(w, unit)
+
     if (editingSetId) {
-      const id = editingSetId
-      onRun(() => updateSet(id, r, w))
+      handlers.updateSet(exercise.id, editingSetId, r, kg)
     } else {
-      onRun(() => logSet(exercise.id, r, w))
+      handlers.logSet(exercise.id, r, kg)
       // Only a freshly logged set earns a rest period; correcting an old one
       // is bookkeeping, not work.
       if (canRest) setOfferRest(true)
@@ -380,7 +560,7 @@ function ExercisePanel({
     if (!last) return
     setEditingSetId(last.id)
     setReps(last.reps_done?.toString() ?? '')
-    setWeight(last.weight?.toString() ?? '')
+    setWeight(last.weight == null ? '' : displayWeight(last.weight, unit))
     setField('reps')
   }
 
@@ -417,7 +597,10 @@ function ExercisePanel({
               >
                 <span className="label-caps">Set {set.set_number}</span>
                 <span className="ml-auto">
-                  {set.reps_done ?? '—'} reps × {set.weight ?? '—'}
+                  {set.reps_done ?? '—'} reps ×{' '}
+                  {set.weight == null
+                    ? '—'
+                    : `${displayWeight(set.weight, unit)} ${unit}`}
                 </span>
               </li>
             ))}
@@ -430,6 +613,7 @@ function ExercisePanel({
           label={editingSetId ? 'Editing Set' : `Set ${nextSetNumber}`}
           reps={reps}
           weight={weight}
+          weightUnit={unit}
           active={field}
           onActivate={setField}
           error={entryError}
@@ -482,7 +666,11 @@ function ExercisePanel({
           )}
 
           <div className="mt-3 grid grid-cols-2 gap-2.5">
-            <ActionButton tone="primary" onClick={handleDone}>
+            <ActionButton
+              tone="primary"
+              onClick={handleDone}
+              disabled={disabled}
+            >
               {editingSetId ? 'Update Set' : 'Log Set'}
             </ActionButton>
             <ActionButton onClick={() => setShowComment((v) => !v)}>
@@ -499,7 +687,7 @@ function ExercisePanel({
             <textarea
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              onBlur={() => onRun(() => saveComment(exercise.id, comment))}
+              onBlur={() => handlers.saveComment(exercise.id, comment)}
               rows={3}
               placeholder="How did it feel?"
               className="mt-2 w-full rounded-xl border border-hairline bg-card-raised px-3 py-2.5 text-[15px] text-primary placeholder:text-faint"
@@ -507,7 +695,7 @@ function ExercisePanel({
           </label>
           <ActionButton
             className="mt-2 w-full"
-            onClick={() => onRun(() => saveComment(exercise.id, comment))}
+            onClick={() => handlers.saveComment(exercise.id, comment)}
           >
             Save Comment
           </ActionButton>
@@ -519,23 +707,29 @@ function ExercisePanel({
         <TripleActionRow>
           <ActionButton
             onClick={handlePreviousSet}
-            disabled={exercise.sets.length === 0}
+            disabled={exercise.sets.length === 0 || disabled}
           >
             Previous Set
           </ActionButton>
           <ActionButton
             tone="primary"
-            onClick={() =>
-              onRun(() => setExerciseStatus(exercise.id, 'completed'))
-            }
+            disabled={disabled}
+            onClick={() => {
+              // A comment typed but never blurred still belongs to this
+              // exercise; save it before the panel moves on.
+              handlers.saveComment(exercise.id, comment)
+              handlers.setStatus(exercise.id, 'completed')
+            }}
           >
             Mark Complete
           </ActionButton>
           <ActionButton
             tone="danger"
-            onClick={() =>
-              onRun(() => setExerciseStatus(exercise.id, 'skipped'))
-            }
+            disabled={disabled}
+            onClick={() => {
+              handlers.saveComment(exercise.id, comment)
+              handlers.setStatus(exercise.id, 'skipped')
+            }}
           >
             Skip Exercise
           </ActionButton>

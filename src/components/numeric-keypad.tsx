@@ -21,6 +21,7 @@ export function NumericEntry({
   onChange,
   label,
   error,
+  weightUnit,
 }: {
   reps: string
   weight: string
@@ -30,6 +31,8 @@ export function NumericEntry({
   label: string
   /** Shown between the fields and the keypad, where the thumb already is. */
   error?: string | null
+  /** The unit typed into the weight field, shown in its label. */
+  weightUnit?: string
 }) {
   function press(key: string) {
     const current = active === 'reps' ? reps : weight
@@ -60,7 +63,7 @@ export function NumericEntry({
           onClick={() => onActivate('reps')}
         />
         <FieldButton
-          label="Weight"
+          label={weightUnit ? `Weight (${weightUnit})` : 'Weight'}
           value={weight}
           active={active === 'weight'}
           onClick={() => onActivate('weight')}

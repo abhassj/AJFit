@@ -7,14 +7,12 @@ import { useState, useTransition } from 'react'
 import {
   deleteSession,
   deleteSet,
+  editComment,
+  editExerciseStatus,
+  editLogSet,
+  editUpdateSet,
   startBackfill,
 } from '@/app/(app)/history/actions'
-import {
-  logSet,
-  saveComment,
-  setExerciseStatus,
-  updateSet,
-} from '@/app/(app)/start/actions'
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -28,6 +26,9 @@ import { NumericEntry, type NumericField } from '@/components/numeric-keypad'
 import { validateSetEntry } from '@/lib/validation'
 import { ActionButton, Banner, TripleActionRow } from '@/components/ui'
 import { formatLongDate } from '@/lib/home-types'
+import { newId } from '@/lib/id'
+import { displayWeight, toKg } from '@/lib/units'
+import { useUnits } from '@/components/units-provider'
 import { ProgramDayPicker } from '@/components/program-day-picker'
 import { DAY_LABELS, type DayOfWeek, type Program } from '@/lib/program-types'
 import {
@@ -523,6 +524,7 @@ function EditableExercise({
   onRun: (fn: () => Promise<Outcome>) => void
   onAdvance: () => void
 }) {
+  const { weight: unit } = useUnits()
   const [reps, setReps] = useState('')
   const [weight, setWeight] = useState('')
   const [field, setField] = useState<NumericField>('reps')
@@ -548,11 +550,16 @@ function EditableExercise({
     }
     setEntryError(null)
 
+    // Typed in the user's unit, stored in kilograms (src/lib/units.ts).
+    const kg = w == null ? null : toKg(w, unit)
+
     if (editingSetId) {
       const id = editingSetId
-      onRun(() => updateSet(id, r, w))
+      onRun(() => editUpdateSet(id, r, kg))
     } else {
-      onRun(() => logSet(exercise.id, r, w))
+      const setNumber =
+        Math.max(0, ...exercise.sets.map((s) => s.set_number)) + 1
+      onRun(() => editLogSet(newId(), exercise.id, setNumber, r, kg))
     }
     clear()
   }
@@ -587,7 +594,10 @@ function EditableExercise({
               >
                 <span className="label-caps">Set {set.set_number}</span>
                 <span className="ml-auto">
-                  {set.reps_done ?? '—'} × {set.weight ?? '—'}
+                  {set.reps_done ?? '—'} ×{' '}
+                  {set.weight == null
+                    ? '—'
+                    : `${displayWeight(set.weight, unit)} ${unit}`}
                 </span>
                 <button
                   type="button"
@@ -595,7 +605,9 @@ function EditableExercise({
                   onClick={() => {
                     setEditingSetId(set.id)
                     setReps(set.reps_done?.toString() ?? '')
-                    setWeight(set.weight?.toString() ?? '')
+                    setWeight(
+                      set.weight == null ? '' : displayWeight(set.weight, unit),
+                    )
                     setField('reps')
                   }}
                   className="ml-1 text-[12px] font-semibold text-secondary hover:text-primary"
@@ -620,6 +632,7 @@ function EditableExercise({
         label={editingSetId ? 'Editing Set' : `Set ${exercise.sets.length + 1}`}
         reps={reps}
         weight={weight}
+        weightUnit={unit}
         active={field}
         onActivate={setField}
         error={entryError}
@@ -642,7 +655,7 @@ function EditableExercise({
             rows={2}
             placeholder="How did it feel?"
             onChange={(e) => setComment(e.target.value)}
-            onBlur={() => onRun(() => saveComment(exercise.id, comment))}
+            onBlur={() => onRun(() => editComment(exercise.id, comment))}
             className="mt-2 w-full rounded-xl border border-hairline bg-card-raised px-3 py-2.5 text-[15px] text-primary placeholder:text-faint"
           />
         </label>
@@ -650,14 +663,16 @@ function EditableExercise({
 
       <TripleActionRow>
         <ActionButton
-          onClick={() => onRun(() => setExerciseStatus(exercise.id, 'pending'))}
+          onClick={() =>
+            onRun(() => editExerciseStatus(exercise.id, 'pending'))
+          }
         >
           Clear
         </ActionButton>
         <ActionButton
           tone="primary"
           onClick={() => {
-            onRun(() => setExerciseStatus(exercise.id, 'completed'))
+            onRun(() => editExerciseStatus(exercise.id, 'completed'))
             onAdvance()
           }}
         >
@@ -666,7 +681,7 @@ function EditableExercise({
         <ActionButton
           tone="danger"
           onClick={() => {
-            onRun(() => setExerciseStatus(exercise.id, 'skipped'))
+            onRun(() => editExerciseStatus(exercise.id, 'skipped'))
             onAdvance()
           }}
         >

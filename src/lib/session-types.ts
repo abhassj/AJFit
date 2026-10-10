@@ -3,6 +3,8 @@
  * Components can use them. Queries and mutations live in `@/lib/session`.
  */
 
+import { DAY_LABELS, type DayOfWeek } from '@/lib/program-types'
+
 export type SessionStatus = 'in_progress' | 'completed' | 'skipped'
 export type SessionExerciseStatus = 'pending' | 'completed' | 'skipped'
 
@@ -30,6 +32,11 @@ export type SessionExercise = {
 
 export type WorkoutSession = {
   id: string
+  /** The template day this session follows; null if that day was deleted. */
+  program_day_id: string | null
+  /** That day's title and weekday, for the heading. */
+  day_title: string | null
+  day_of_week: DayOfWeek | null
   session_date: string
   status: SessionStatus
   start_time: string | null
@@ -37,6 +44,19 @@ export type WorkoutSession = {
   /** Postgres interval, normalised to whole seconds by the query. */
   paused_seconds: number
   exercises: SessionExercise[]
+}
+
+/**
+ * The heading for a session: the title of the day actually being run, then
+ * that day's weekday name, then a neutral fallback for a session whose
+ * template day has since been deleted.
+ */
+export function sessionHeading(
+  session: Pick<WorkoutSession, 'day_title' | 'day_of_week'>,
+): string {
+  if (session.day_title) return session.day_title
+  if (session.day_of_week) return DAY_LABELS[session.day_of_week]
+  return 'Workout'
 }
 
 /**

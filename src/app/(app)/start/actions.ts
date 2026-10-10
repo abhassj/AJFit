@@ -1,11 +1,11 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { refresh } from 'next/cache'
 import { unstable_rethrow } from 'next/navigation'
 
-import { requireUser } from '@/lib/auth'
+import { requireSession, requireUser } from '@/lib/auth'
 import { getOrCreateProgram } from '@/lib/program'
-import { DAY_LABELS, type DayOfWeek } from '@/lib/program-types'
+import { DAY_LABELS } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
 import { intervalToSeconds, secondsToInterval } from '@/lib/session-types'
 import { getViewerDateKey, getViewerDayOfWeek } from '@/lib/viewer-time'
@@ -14,42 +14,66 @@ export type ActionResult = { ok: true } | { ok: false; error: string }
 
 const fail = (error: string): ActionResult => ({ ok: false, error })
 
-function refresh() {
-  revalidatePath('/start')
-}
+/*
+ * How these actions reach the screen.
+ *
+ * Starting, skipping and finishing change WHICH screen /start shows, so they
+ * end with refresh(): one re-render of the current page.
+ *
+ * Everything that happens mid-session (logging a set, completing or skipping
+ * an exercise, a comment, a pause) deliberately does not refresh at all. The
+ * session runner shows the change the instant it is tapped and holds the
+ * session in client state while it is on screen. These actions used to call
+ * revalidatePath('/start'), which re-rendered the page and its layout and
+ * re-ran the prefetch of every tab in the bottom bar: about twenty Supabase
+ * requests per tap, ~1.7s before a set appeared at 200ms of latency. Now a
+ * tap costs the one write it actually needs.
+ *
+ * The hot-path actions use requireSession() rather than requireUser(): they
+ * never read user.id, and the database already authorises the write itself
+ * (JWT verified by PostgREST, ownership by RLS). See src/lib/auth.ts.
+ */
 
 /**
  * Begins today's session and materialises one session_exercise per templated
  * exercise, so per-exercise status and comments have a row to live on from the
  * first tap.
  *
- * `programDayOfWeek` lets the user run a day that is not today's actual
- * weekday — training days slip, and the calendar weekday should not dictate
- * which workout you are allowed to do. It defaults to today's weekday.
- * The session still records the real calendar date; only the template it
- * follows is chosen.
+ * `programDayId` lets the user run a day that is not today's actual weekday —
+ * training days slip, and the calendar weekday should not dictate which
+ * workout you are allowed to do. It defaults to today's weekday. The session
+ * still records the real calendar date; only the template it follows is
+ * chosen. The picker sends the day's id rather than a weekday name because
+ * that id is the one value the heading, the exercise list and the stored
+ * session all derive from.
  */
 export async function startSession(
-  programDayOfWeek?: DayOfWeek,
+  programDayId?: string,
 ): Promise<ActionResult> {
   try {
     const { supabase, user } = await requireUser()
     const date = await getViewerDateKey()
 
-    const existing = await getSessionForDate(date)
+    // Independent reads, so in parallel: each is a round trip to the database.
+    const [existing, program] = await Promise.all([
+      getSessionForDate(date),
+      getOrCreateProgram(),
+    ])
     if (existing) return fail('A session already exists for today.')
 
-    const program = await getOrCreateProgram()
-    const chosen = programDayOfWeek ?? (await getViewerDayOfWeek())
-    const day = program.days.find((d) => d.day_of_week === chosen)
+    const todayDow = programDayId ? null : await getViewerDayOfWeek()
+    // Only ever a day of the caller's own program: an id from anywhere else
+    // is simply not found here.
+    const day = program.days.find((d) =>
+      programDayId ? d.id === programDayId : d.day_of_week === todayDow,
+    )
     if (!day) return fail('No program day for that selection.')
+    const label = DAY_LABELS[day.day_of_week]
     if (day.is_rest_day) {
-      return fail(`${DAY_LABELS[chosen]} is a rest day in your program.`)
+      return fail(`${label} is a rest day in your split.`)
     }
     if (day.exercises.length === 0) {
-      return fail(
-        `${DAY_LABELS[chosen]} has no exercises. Add some in the Program builder.`,
-      )
+      return fail(`${label} has no exercises. Add some in My Workout Split.`)
     }
 
     const { data: session, error } = await supabase
@@ -75,6 +99,8 @@ export async function startSession(
         day.exercises.map((exercise) => ({
           session_id: session.id,
           program_exercise_id: exercise.id,
+          // Snapshot of what is being performed; see the v2 schema migration.
+          exercise_id: exercise.exercise_id,
           status: 'pending' as const,
         })),
       )
@@ -104,10 +130,12 @@ export async function skipDay(): Promise<ActionResult> {
     const { supabase, user } = await requireUser()
     const date = await getViewerDateKey()
 
-    const existing = await getSessionForDate(date)
+    const [existing, program] = await Promise.all([
+      getSessionForDate(date),
+      getOrCreateProgram(),
+    ])
     if (existing) return fail('A session already exists for today.')
 
-    const program = await getOrCreateProgram()
     const viewerDow = await getViewerDayOfWeek()
     const day = program.days.find((d) => d.day_of_week === viewerDow)
 
@@ -132,41 +160,42 @@ export async function skipDay(): Promise<ActionResult> {
   }
 }
 
-/** Appends a set, numbering it after whatever is already logged. */
+/**
+ * Records one set.
+ *
+ * The client chooses the row id and the set number. That makes the write a
+ * single round trip (no read of the last set_number first) and makes it
+ * idempotent: if a save is retried after a dropped connection, the duplicate
+ * insert is ignored rather than logging the set twice. The set number is safe
+ * to take from the client because a session is logged on one device, in
+ * order, through the runner's write queue.
+ */
 export async function logSet(
+  setId: string,
   sessionExerciseId: string,
+  setNumber: number,
   reps: number | null,
   weight: number | null,
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireUser()
+    const { supabase } = await requireSession()
 
-    const { data: last, error: lastError } = await supabase
-      .from('sets')
-      .select('set_number')
-      .eq('session_exercise_id', sessionExerciseId)
-      .order('set_number', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (lastError)
-      return fail(`Could not read existing sets: ${lastError.message}`)
-
-    const { error } = await supabase.from('sets').insert({
-      session_exercise_id: sessionExerciseId,
-      set_number: (last?.set_number ?? 0) + 1,
-      reps_done: reps,
-      weight,
-    })
+    const { error } = await supabase.from('sets').upsert(
+      {
+        id: setId,
+        session_exercise_id: sessionExerciseId,
+        set_number: setNumber,
+        reps_done: reps,
+        weight,
+      },
+      { onConflict: 'id', ignoreDuplicates: true },
+    )
 
     if (error) return fail(`Could not log the set: ${error.message}`)
-
-    refresh()
     return { ok: true }
   } catch (e) {
-    // requireUser() redirects an expired session, and redirect() signals by
-    // throwing. Without this the catch would swallow it and report the
-    // framework's internal marker as a failed save.
+    // requireSession() redirects an expired session, and redirect() signals
+    // by throwing; let it through.
     unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
@@ -179,7 +208,7 @@ export async function updateSet(
   weight: number | null,
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireUser()
+    const { supabase } = await requireSession()
     const { error } = await supabase
       .from('sets')
       .update({ reps_done: reps, weight })
@@ -187,10 +216,9 @@ export async function updateSet(
 
     if (error) return fail(`Could not update the set: ${error.message}`)
 
-    refresh()
     return { ok: true }
   } catch (e) {
-    // requireUser() redirects an expired session, and redirect() signals by
+    // requireSession() redirects an expired session, and redirect() signals by
     // throwing. Without this the catch would swallow it and report the
     // framework's internal marker as a failed save.
     unstable_rethrow(e)
@@ -208,7 +236,7 @@ export async function setExerciseStatus(
   status: 'completed' | 'skipped' | 'pending',
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireUser()
+    const { supabase } = await requireSession()
     const { error } = await supabase
       .from('session_exercises')
       .update({
@@ -219,10 +247,9 @@ export async function setExerciseStatus(
 
     if (error) return fail(`Could not update the exercise: ${error.message}`)
 
-    refresh()
     return { ok: true }
   } catch (e) {
-    // requireUser() redirects an expired session, and redirect() signals by
+    // requireSession() redirects an expired session, and redirect() signals by
     // throwing. Without this the catch would swallow it and report the
     // framework's internal marker as a failed save.
     unstable_rethrow(e)
@@ -235,7 +262,7 @@ export async function saveComment(
   comment: string,
 ): Promise<ActionResult> {
   try {
-    const { supabase } = await requireUser()
+    const { supabase } = await requireSession()
     const { error } = await supabase
       .from('session_exercises')
       .update({ comment: comment.trim() || null })
@@ -243,10 +270,9 @@ export async function saveComment(
 
     if (error) return fail(`Could not save the comment: ${error.message}`)
 
-    refresh()
     return { ok: true }
   } catch (e) {
-    // requireUser() redirects an expired session, and redirect() signals by
+    // requireSession() redirects an expired session, and redirect() signals by
     // throwing. Without this the catch would swallow it and report the
     // framework's internal marker as a failed save.
     unstable_rethrow(e)
@@ -268,7 +294,7 @@ export async function addPausedSeconds(
 ): Promise<ActionResult> {
   try {
     if (!Number.isFinite(seconds) || seconds <= 0) return { ok: true }
-    const { supabase } = await requireUser()
+    const { supabase } = await requireSession()
 
     const { data: current, error: readError } = await supabase
       .from('sessions')
@@ -292,10 +318,9 @@ export async function addPausedSeconds(
 
     if (error) return fail(`Could not update the timer: ${error.message}`)
 
-    refresh()
     return { ok: true }
   } catch (e) {
-    // requireUser() redirects an expired session, and redirect() signals by
+    // requireSession() redirects an expired session, and redirect() signals by
     // throwing. Without this the catch would swallow it and report the
     // framework's internal marker as a failed save.
     unstable_rethrow(e)
@@ -314,7 +339,7 @@ export async function finishSession(
       if (!result.ok) return result
     }
 
-    const { supabase } = await requireUser()
+    const { supabase } = await requireSession()
     const { error } = await supabase
       .from('sessions')
       .update({ status: 'completed', end_time: new Date().toISOString() })
@@ -325,7 +350,7 @@ export async function finishSession(
     refresh()
     return { ok: true }
   } catch (e) {
-    // requireUser() redirects an expired session, and redirect() signals by
+    // requireSession() redirects an expired session, and redirect() signals by
     // throwing. Without this the catch would swallow it and report the
     // framework's internal marker as a failed save.
     unstable_rethrow(e)
