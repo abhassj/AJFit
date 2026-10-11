@@ -158,7 +158,11 @@ export default suite(
       await page.goto(`${APP_URL}/history/2026-09-07`)
       const text = (await page.locator('main').last().textContent()) ?? ''
       assert.match(text, /Lat Pulldown/)
-      assert.match(text, /10 × 55 kg/)
+      // CHANGED in V2 Phase 3: the day opens in the read-only detail view,
+      // which lists weight and reps in their own columns. Previously (editor):
+      //   assert.match(text, /10 × 55 kg/)
+      assert.match(text, /55 kg/)
+      assert.match(text, /10 reps/)
       await page.close()
     },
 

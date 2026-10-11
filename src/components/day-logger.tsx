@@ -58,6 +58,7 @@ export function DayLogger({
   calendarDow,
   isFuture,
   weekLocks,
+  doneHref,
 }: {
   date: string
   session: WorkoutSession | null
@@ -66,6 +67,12 @@ export function DayLogger({
   isFuture: boolean
   /** program_day id → date completed, for the Mon–Sun week of `date`. */
   weekLocks: Record<string, string>
+  /**
+   * Set when editing a logged day opened from its read-only detail view:
+   * where "Done editing" (and the back link) return to. Edits save as they
+   * are made, so leaving is all "done" has to do.
+   */
+  doneHref?: string
 }) {
   const [error, setError] = useState<string | null>(null)
   const [confirmingRest, setConfirmingRest] = useState(false)
@@ -115,11 +122,20 @@ export function DayLogger({
 
   const back = (
     <Link
-      href="/"
+      href={session && doneHref ? doneHref : '/'}
       className="inline-flex items-center gap-2 py-2 text-sm text-secondary transition-colors hover:text-primary"
     >
       <ArrowLeftIcon className="h-4 w-4" />
-      Home
+      {session && doneHref ? 'Back to day' : 'Home'}
+    </Link>
+  )
+
+  const done = doneHref && (
+    <Link
+      href={doneHref}
+      className="mt-4 flex min-h-[52px] w-full items-center justify-center rounded-xl bg-primary text-sm font-bold tracking-wide text-base uppercase transition-colors hover:bg-primary/90"
+    >
+      Done Editing
     </Link>
   )
 
@@ -255,6 +271,7 @@ export function DayLogger({
         <p className="surface rounded-2xl px-5 py-8 text-center text-sm text-secondary">
           This day was explicitly marked as skipped. No sets were logged.
         </p>
+        {done}
         <DeleteDay
           confirming={confirmingDelete}
           setConfirming={setConfirmingDelete}
@@ -284,6 +301,8 @@ export function DayLogger({
         date={date}
         onRun={run}
       />
+
+      {done}
 
       <DeleteDay
         confirming={confirmingDelete}

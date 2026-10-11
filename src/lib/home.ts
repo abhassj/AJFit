@@ -37,14 +37,18 @@ type SessionRow = {
   id: string
   session_date: string
   status: 'completed' | 'skipped' | 'in_progress'
+  program_days: { title: string | null } | null
 }
+
+/** Sessions plus the title of the program day each one actually followed. */
+const SESSION_ROW_SELECT = 'id, session_date, status, program_days ( title )'
 
 /**
  * Resolves one calendar day.
  *
- * An in-progress session counts as neither completed nor skipped — it falls
- * through to the same treatment as an unlogged day so a half-finished session
- * never inflates the summary.
+ * An in-progress session counts as neither completed nor skipped, so a
+ * half-finished session never inflates the summary or turns a day red; it has
+ * its own neutral status so the day still reads as "something is open here".
  */
 function resolveStatus(
   session: SessionRow | undefined,
@@ -54,6 +58,7 @@ function resolveStatus(
 ): DayStatus {
   if (session?.status === 'completed') return 'completed'
   if (session?.status === 'skipped') return 'skipped'
+  if (session?.status === 'in_progress') return 'in_progress'
   if (isRestDay) return 'rest'
   // Today counts as upcoming until something is logged — the day is not over.
   if (date >= today) return 'upcoming'
@@ -75,7 +80,7 @@ async function buildMonth(
   const [sessionsResult, program] = await Promise.all([
     supabase
       .from('sessions')
-      .select('id, session_date, status')
+      .select(SESSION_ROW_SELECT)
       .gte('session_date', monthStart)
       .lte('session_date', monthEnd),
     getOrCreateProgram(),
@@ -86,7 +91,7 @@ async function buildMonth(
   }
 
   const byDate = new Map<string, SessionRow>()
-  for (const s of (sessionsResult.data ?? []) as SessionRow[]) {
+  for (const s of (sessionsResult.data ?? []) as unknown as SessionRow[]) {
     const existing = byDate.get(s.session_date)
     if (!existing || existing.status === 'in_progress') {
       byDate.set(s.session_date, s)
@@ -180,7 +185,7 @@ export async function getHomeData(now?: Date): Promise<HomeData> {
     await Promise.all([
       supabase
         .from('sessions')
-        .select('id, session_date, status')
+        .select(SESSION_ROW_SELECT)
         .gte('session_date', rangeStart)
         .lte('session_date', rangeEnd)
         .order('session_date'),
@@ -201,7 +206,7 @@ export async function getHomeData(now?: Date): Promise<HomeData> {
     throw new Error(`Failed to load sessions: ${sessionsResult.error.message}`)
   }
 
-  const sessions = (sessionsResult.data ?? []) as SessionRow[]
+  const sessions = (sessionsResult.data ?? []) as unknown as SessionRow[]
   const byDate = new Map<string, SessionRow>()
   for (const s of sessions) {
     // A day holds at most one session; prefer a resolved one over in_progress.
@@ -228,6 +233,7 @@ export async function getHomeData(now?: Date): Promise<HomeData> {
       ),
       isToday: key === today,
       sessionId: session?.id ?? null,
+      dayTitle: session?.program_days?.title?.trim() || null,
     }
   })
 

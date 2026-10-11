@@ -12,8 +12,15 @@ import { DAYS_OF_WEEK, type DayOfWeek } from '@/lib/program-types'
  * apart because the PRD's whole point is that an intentional rest reads
  * differently from a day that simply has not happened yet, which in turn reads
  * differently from one that was left unlogged (PRD §8.4).
+ *
+ * Colour rules (V2 Phase 3): `completed` is green whatever happened to single
+ * exercises — finishing the session is what counts. `skipped` (a whole-day
+ * skip) is the only red. `missed` stays neutral: not logging is not a failure
+ * the app should shout about. `in_progress` is a started, unfinished session —
+ * neither green nor red.
  */
-export type DayStatus = 'completed' | 'skipped' | 'rest' | 'upcoming' | 'missed'
+export type DayStatus =
+  'completed' | 'skipped' | 'in_progress' | 'rest' | 'upcoming' | 'missed'
 
 export type WeekDay = {
   date: string
@@ -21,6 +28,12 @@ export type WeekDay = {
   status: DayStatus
   isToday: boolean
   sessionId: string | null
+  /**
+   * Title of the program day the session actually followed (via
+   * sessions.program_day_id, not the weekday), for the initials under the
+   * bar. Null without a session, or when that day has no title or is gone.
+   */
+  dayTitle: string | null
 }
 
 export type CalendarDay = {
@@ -151,4 +164,32 @@ const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 /** "Mon" for a YYYY-MM-DD key. Fixed English, matching the rest of the UI. */
 export function shortWeekday(key: string): string {
   return SHORT_WEEKDAYS[parseDateKey(key).getDay()]
+}
+
+/**
+ * Short initials for a workout title, for the weekly bar (decision D7).
+ *
+ *   "Back & Biceps" → "BB", "Shoulder, Legs & Core" → "SLC", "Legs" → "LE"
+ *
+ * The title is split into parts on "&", "and", ",", "+" and "/"; each part
+ * contributes its first letter, up to three. A title that is one part but
+ * several words ("Upper Body") takes each word's first letter instead, and a
+ * single word takes its first two letters, so it never shrinks to one letter.
+ * Empty or missing titles give null, which the caller shows as a neutral mark.
+ */
+export function dayInitials(title: string | null | undefined): string | null {
+  const parts = (title ?? '')
+    .split(/\s*(?:&|\+|\/|,|\band\b)\s*/i)
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (parts.length === 0) return null
+
+  const letters =
+    parts.length > 1
+      ? parts.map((p) => p[0])
+      : parts[0].split(/\s+/).length > 1
+        ? parts[0].split(/\s+/).map((w) => w[0])
+        : [...parts[0].slice(0, 2)]
+
+  return letters.slice(0, 3).join('').toUpperCase()
 }

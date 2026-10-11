@@ -14,6 +14,7 @@ export const STATUS_STYLE: Record<DayStatus, { fill: string; label: string }> =
   {
     completed: { fill: 'bg-success', label: 'Completed' },
     skipped: { fill: 'bg-danger', label: 'Skipped' },
+    in_progress: { fill: 'bg-primary/40', label: 'In progress' },
     rest: { fill: 'bg-secondary/45', label: 'Rest' },
     upcoming: { fill: 'bg-hairline', label: 'Upcoming' },
     missed: { fill: 'bg-faint/35', label: 'Not logged' },
@@ -85,6 +86,7 @@ export function MonthCalendar({ month }: { month: HomeData['month'] }) {
       <p className="mt-1.5 text-[12px] leading-relaxed text-faint">
         Tap any past day to view or log that workout. Swipe to change month.
       </p>
+      <StatusLegend />
 
       <div className="mt-3.5 grid grid-cols-7 gap-1">
         {DOW_HEADS.map((d) => (
@@ -124,18 +126,29 @@ export function MonthCalendar({ month }: { month: HomeData['month'] }) {
           </m.div>
         </AnimatePresence>
       </div>
+    </section>
+  )
+}
 
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
-        {(['completed', 'skipped', 'rest'] as const).map((s) => (
+/**
+ * What the colours mean, shared by the calendar and the weekly bar. Green is
+ * any finished session, even with exercises skipped; red is only a whole-day
+ * skip; a day that was simply not logged stays neutral.
+ */
+export function StatusLegend() {
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1.5">
+      {(['completed', 'skipped', 'in_progress', 'missed', 'rest'] as const).map(
+        (s) => (
           <span key={s} className="flex items-center gap-1.5">
             <span className={`h-2 w-2 rounded-full ${STATUS_STYLE[s].fill}`} />
             <span className="text-[11px] text-faint">
               {STATUS_STYLE[s].label}
             </span>
           </span>
-        ))}
-      </div>
-    </section>
+        ),
+      )}
+    </div>
   )
 }
 
@@ -155,13 +168,21 @@ function CalendarCell({ day }: { day: CalendarDay }) {
     )
   }
 
-  const tone = day.sessionId
-    ? day.status === 'completed'
+  /*
+   * Keyed on the status, not on whether a session exists: a session that was
+   * started and never finished used to fall into the red branch alongside
+   * real skips.
+   */
+  const tone =
+    day.status === 'completed'
       ? 'bg-success/20 text-success font-semibold hover:bg-success/30'
-      : 'bg-danger/20 text-danger font-semibold hover:bg-danger/30'
-    : day.status === 'rest'
-      ? 'bg-card-raised/40 text-faint hover:bg-card-raised'
-      : 'text-secondary hover:bg-card-raised'
+      : day.status === 'skipped'
+        ? 'bg-danger/20 text-danger font-semibold hover:bg-danger/30'
+        : day.status === 'in_progress'
+          ? 'text-primary font-semibold ring-1 ring-inset ring-primary/40 hover:bg-card-raised'
+          : day.status === 'rest'
+            ? 'bg-card-raised/40 text-faint hover:bg-card-raised'
+            : 'text-secondary hover:bg-card-raised'
 
   const label = day.sessionId
     ? `${day.date}, ${STATUS_STYLE[day.status ?? 'missed'].label} — open session`

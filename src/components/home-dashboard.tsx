@@ -6,7 +6,7 @@ import { PlayIcon } from '@/components/icons'
 import { StaggerItem, StaggerList } from '@/components/motion'
 import { MonthCalendar, STATUS_STYLE } from '@/components/month-calendar'
 import { DAY_SHORT } from '@/lib/program-types'
-import type { HomeData, WeekDay } from '@/lib/home-types'
+import { dayInitials, type HomeData, type WeekDay } from '@/lib/home-types'
 
 export function HomeDashboard({
   data,
@@ -93,7 +93,29 @@ function WeeklySummary({ week }: { week: WeekDay[] }) {
         ))}
       </div>
 
-      <div className="mt-2.5 flex gap-1.5">
+      {/*
+       * Initials of the workout actually done that day (D7) — taken from the
+       * session's own program day, so a Monday spent on Legs reads "LE", not
+       * Monday's scheduled workout. Days without a session show none.
+       */}
+      <div className="mt-2 flex gap-1.5" data-testid="week-initials">
+        {week.map((day) => (
+          <span
+            key={day.date}
+            className={`flex-1 text-center text-[11px] font-bold tracking-wide ${
+              day.status === 'completed'
+                ? 'text-success'
+                : day.status === 'skipped'
+                  ? 'text-danger'
+                  : 'text-secondary'
+            }`}
+          >
+            {day.sessionId ? (dayInitials(day.dayTitle) ?? '•') : ''}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-1 flex gap-1.5">
         {week.map((day) => (
           <span
             key={day.date}
@@ -117,7 +139,10 @@ function WeeklySummary({ week }: { week: WeekDay[] }) {
 
 function weekAriaLabel(week: WeekDay[]) {
   return week
-    .map((d) => `${DAY_SHORT[d.day_of_week]}: ${STATUS_STYLE[d.status].label}`)
+    .map(
+      (d) =>
+        `${DAY_SHORT[d.day_of_week]}: ${STATUS_STYLE[d.status].label}${d.dayTitle ? ` (${d.dayTitle})` : ''}`,
+    )
     .join(', ')
 }
 

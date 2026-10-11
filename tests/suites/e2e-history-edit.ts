@@ -41,7 +41,13 @@ export default suite(
       const page = await ctx.newPage()
       try {
         await signIn(page, user)
+        // CHANGED in V2 Phase 3: a logged day opens read-only first, and the
+        // editor is behind "Edit logged workout". Previously the keypad was on
+        // /history/<date> directly:
+        //   await page.goto(`${APP_URL}/history/2026-09-07`)  // then type
         await page.goto(`${APP_URL}/history/2026-09-07`)
+        await page.getByRole('link', { name: 'Edit logged workout' }).click()
+        await page.getByRole('button', { name: 'Add Set' }).waitFor()
         for (const k of '11') {
           await page.getByRole('button', { name: k, exact: true }).click()
         }
