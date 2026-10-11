@@ -17,14 +17,15 @@ export type LoggedSet = {
 
 export type SessionExercise = {
   id: string
-  program_exercise_id: string
+  /** The Split slot this was logged from; null once that slot is removed. */
+  program_exercise_id: string | null
   status: SessionExerciseStatus
   completed_at: string | null
   comment: string | null
-  /** From the template, for display. */
+  /** Snapshots taken when the session was logged. */
   exercise_name: string
   prescribed_reps: string | null
-  /** From the template. Null means no rest timer is offered. */
+  /** Live from the slot. Null means no rest timer is offered. */
   rest_seconds: number | null
   exercise_order: number
   sets: LoggedSet[]

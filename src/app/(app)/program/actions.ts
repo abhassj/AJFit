@@ -4,12 +4,7 @@ import { revalidatePath } from 'next/cache'
 
 import { requireUser } from '@/lib/auth'
 import { getOrCreateProgram } from '@/lib/program'
-import {
-  DAY_LABELS,
-  DAYS_OF_WEEK,
-  type DayOfWeek,
-  type DraftDay,
-} from '@/lib/program-types'
+import { DAY_LABELS, DAYS_OF_WEEK, type DraftDay } from '@/lib/program-types'
 import {
   parseDayTitle,
   parseRestSeconds,
@@ -80,62 +75,23 @@ export async function saveProgram(
   }
 
   /*
-   * Decide what the draft removes, and refuse a removal that would destroy
-   * logged history, BEFORE writing anything.
+   * What the draft removes, worked out from the program as loaded. A rest day
+   * keeps no exercises, so everything on one is a removal.
    *
-   * This check used to run last, after the name, every day row and every
-   * exercise update had already been written — so a refused save was half
-   * applied: marking a logged day as rest flipped its flag, the error said
-   * "Everything else was left unchanged", and the day's exercises stayed
-   * behind. Working out the removals from the program as loaded means a
-   * refusal now really does change nothing.
-   *
-   * A rest day keeps no exercises, so everything on one is a removal.
+   * Removing an exercise that has been logged is allowed: its log rows keep
+   * their own snapshot of what was performed (exercise_id, order, prescribed
+   * reps) and only lose the link back to the slot, which the database clears
+   * (ON DELETE SET NULL, migration 20261012120000). Before that migration the
+   * link was RESTRICT, and this action had to refuse such removals.
    */
   const keptIds = new Set(
     days.flatMap((day) =>
       day.is_rest_day ? [] : day.exercises.flatMap((e) => (e.id ? [e.id] : [])),
     ),
   )
-  const stale = program.days.flatMap((day) =>
-    day.exercises.filter((e) => !keptIds.has(e.id)),
+  const staleIds = program.days.flatMap((day) =>
+    day.exercises.filter((e) => !keptIds.has(e.id)).map((e) => e.id),
   )
-
-  if (stale.length > 0) {
-    /*
-     * session_exercises references program_exercises ON DELETE RESTRICT, so an
-     * exercise that has already been logged cannot be removed from the
-     * template without destroying that history. Detect it up front and name the
-     * offenders, rather than letting the save fail on a raw FK violation.
-     */
-    const { data: logged, error: loggedError } = await supabase
-      .from('session_exercises')
-      .select('program_exercise_id')
-      .in(
-        'program_exercise_id',
-        stale.map((e) => e.id),
-      )
-
-    if (loggedError) {
-      return {
-        ok: false,
-        error: `Could not check logged history: ${loggedError.message}`,
-      }
-    }
-
-    const blockedIds = new Set((logged ?? []).map((r) => r.program_exercise_id))
-    if (blockedIds.size > 0) {
-      const unique = [
-        ...new Set(
-          stale.filter((e) => blockedIds.has(e.id)).map((e) => e.exercise_name),
-        ),
-      ]
-      return {
-        ok: false,
-        error: `${unique.join(', ')} ${unique.length === 1 ? 'has' : 'have'} logged workout history and cannot be removed from the program. Nothing was changed.`,
-      }
-    }
-  }
 
   const { error: nameError } = await supabase
     .from('programs')
@@ -224,123 +180,17 @@ export async function saveProgram(
   const failedDay = dayResults.find((r) => !r.ok)
   if (failedDay) return { ok: false, error: failedDay.error }
 
-  if (stale.length > 0) {
+  if (staleIds.length > 0) {
     const { error: deleteError } = await supabase
       .from('program_exercises')
       .delete()
-      .in(
-        'id',
-        stale.map((e) => e.id),
-      )
+      .in('id', staleIds)
 
     if (deleteError) {
       return {
         ok: false,
         error: `Could not remove deleted exercises: ${deleteError.message}`,
       }
-    }
-  }
-
-  revalidatePath('/program')
-  revalidatePath('/start')
-  return { ok: true }
-}
-
-/**
- * Replaces one day with the contents of another.
- *
- * This is a replace, not a merge: the target's title, rest-day flag and entire
- * exercise list are overwritten by the source's. The caller confirms before
- * calling, since it is destructive.
- *
- * Copying goes through the database rather than the builder's draft so the copy
- * reflects what is actually saved on the source day, not unsaved edits sitting
- * in the form.
- */
-export async function copyDay(
-  fromDayOfWeek: DayOfWeek,
-  toDayOfWeek: DayOfWeek,
-): Promise<SaveResult> {
-  if (fromDayOfWeek === toDayOfWeek) {
-    return { ok: false, error: 'Pick a different day to copy from.' }
-  }
-
-  const { supabase } = await requireUser()
-
-  const program = await getOrCreateProgram()
-  const source = program.days.find((d) => d.day_of_week === fromDayOfWeek)
-  const target = program.days.find((d) => d.day_of_week === toDayOfWeek)
-
-  if (!source || !target) return { ok: false, error: 'Unknown day.' }
-  if (source.is_rest_day || source.exercises.length === 0) {
-    return {
-      ok: false,
-      error: 'That day has no exercises to copy.',
-    }
-  }
-
-  /*
-   * Existing target rows may be referenced by logged sessions
-   * (ON DELETE RESTRICT), so refuse up front and name them rather than failing
-   * on a raw FK violation mid-copy — same guard as saveProgram.
-   */
-  const existingIds = target.exercises.map((e) => e.id)
-  if (existingIds.length > 0) {
-    const { data: logged, error: loggedError } = await supabase
-      .from('session_exercises')
-      .select('program_exercise_id')
-      .in('program_exercise_id', existingIds)
-
-    if (loggedError) {
-      return {
-        ok: false,
-        error: `Could not check history: ${loggedError.message}`,
-      }
-    }
-    if ((logged ?? []).length > 0) {
-      return {
-        ok: false,
-        error: `${DAY_LABELS[toDayOfWeek]} has logged workout history and cannot be overwritten. Nothing was changed.`,
-      }
-    }
-
-    const { error: clearError } = await supabase
-      .from('program_exercises')
-      .delete()
-      .in('id', existingIds)
-    if (clearError) {
-      return {
-        ok: false,
-        error: `Could not clear the day: ${clearError.message}`,
-      }
-    }
-  }
-
-  const { error: dayError } = await supabase
-    .from('program_days')
-    .update({ title: source.title, is_rest_day: source.is_rest_day })
-    .eq('id', target.id)
-  if (dayError) {
-    return { ok: false, error: `Could not update the day: ${dayError.message}` }
-  }
-
-  const { error: insertError } = await supabase
-    .from('program_exercises')
-    .insert(
-      source.exercises.map((exercise, index) => ({
-        program_day_id: target.id,
-        exercise_id: exercise.exercise_id,
-        prescribed_reps: exercise.prescribed_reps,
-        exercise_order: index,
-        rest_seconds: exercise.rest_seconds,
-        custom_fields: exercise.custom_fields ?? {},
-      })),
-    )
-
-  if (insertError) {
-    return {
-      ok: false,
-      error: `Could not copy the exercises: ${insertError.message}`,
     }
   }
 

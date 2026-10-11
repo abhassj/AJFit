@@ -99,8 +99,11 @@ export async function startSession(
         day.exercises.map((exercise) => ({
           session_id: session.id,
           program_exercise_id: exercise.id,
-          // Snapshot of what is being performed; see the v2 schema migration.
+          // Snapshot of what is being performed, so the log survives the slot
+          // changing or being removed (migrations 20261010120000, 20261012120000).
           exercise_id: exercise.exercise_id,
+          exercise_order: exercise.exercise_order,
+          prescribed_reps: exercise.prescribed_reps,
           status: 'pending' as const,
         })),
       )

@@ -39,8 +39,11 @@ import {
 /** Reachable without a session by design. */
 const PUBLIC = ['signIn', 'signOut', 'signUp']
 
-/** Exported from a 'use server' file but imported by no client module. */
-const NOT_EXPOSED = ['copyDay']
+/**
+ * Exported from a 'use server' file but imported by no client module.
+ * Was ['copyDay'] until that dead export was deleted in V2 Batch B.
+ */
+const NOT_EXPOSED: string[] = []
 
 let a: TestUser
 let b: TestUser

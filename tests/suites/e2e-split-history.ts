@@ -4,7 +4,8 @@
  *
  * Days are never deleted by the app (a split always has seven day rows); a day
  * is "removed" by emptying it or marking it rest, which means removing its
- * exercises. So the question is what removing a logged exercise does.
+ * exercises. So the question is what removing a logged exercise does — since
+ * migration 20261012120000, it succeeds and the log keeps its own snapshot.
  */
 import assert from 'node:assert/strict'
 
@@ -77,55 +78,17 @@ function logsFingerprint() {
     where e.session_id = '${doneSession}'`)
 }
 
+/** Every logged set of the session; unaffected by slot changes. */
+function setsFingerprint() {
+  return sqlValue(`select md5(string_agg(row(t.*)::text, '|' order by t.id))
+    from public.sets t join public.session_exercises e on e.id = t.session_exercise_id
+    where e.session_id = '${doneSession}'`)
+}
+
 export default suite(
   'e2e-split-history',
   {
-    async 'removing a logged exercise is refused, and its logs survive'() {
-      const before = logsFingerprint()
-      const draft = currentDraft()
-      const monday = draft.find((d) => d.day_of_week === 'monday')!
-      monday.exercises = monday.exercises.slice(1) // drop Lat Pulldown
-      const result = await save(draft)
-      assert.equal(result.ok, false)
-      assert.match(
-        result.error ?? '',
-        /Lat Pulldown has logged workout history/,
-      )
-      assert.equal(logsFingerprint(), before)
-      assert.equal(
-        sqlValue(`select count(*) from public.program_exercises
-          where id = '${seeded.programExerciseIds.monday[0]}'`),
-        '1',
-      )
-    },
-
-    async 'turning a logged day into an empty rest day is refused too'() {
-      const before = dbFingerprint(user.id)
-      const draft = currentDraft()
-      const monday = draft.find((d) => d.day_of_week === 'monday')!
-      monday.is_rest_day = true
-      monday.exercises = []
-      const result = await save(draft)
-      assert.equal(result.ok, false)
-      assert.equal(
-        dbFingerprint(user.id),
-        before,
-        'a refused save changed data',
-      )
-    },
-
-    async 'removing an exercise that was never logged works'() {
-      const draft = currentDraft()
-      draft.find((d) => d.day_of_week === 'tuesday')!.exercises = []
-      const result = await save(draft)
-      assert.equal(result.ok, true, result.error)
-      assert.equal(
-        sqlValue(`select count(*) from public.program_exercises
-          where id = '${seeded.programExerciseIds.tuesday[0]}'`),
-        '0',
-      )
-    },
-
+    // Runs first, while both logged slots still exist.
     async 'swapping a logged slot’s exercise leaves history naming the old one'() {
       const before = logsFingerprint()
       const draft = currentDraft()
@@ -143,6 +106,98 @@ export default suite(
       assert.match(text, /Lat Pulldown/)
       assert.doesNotMatch(text, /Neutral-Grip Cable Pulldown/)
       await page.close()
+    },
+
+    async 'an invalid draft is refused and changes nothing'() {
+      // The atomicity guarantee from the pre-push audit: a refusal must not be
+      // half applied. Before migration 20261012120000 this was exercised by the
+      // logged-history refusal, which no longer exists; validation is the
+      // remaining refusal path.
+      const before = dbFingerprint(user.id)
+      const draft = currentDraft()
+      draft.find((d) => d.day_of_week === 'monday')!.title = 'x'.repeat(61)
+      draft.find((d) => d.day_of_week === 'tuesday')!.is_rest_day = true
+      const result = await save(draft)
+      assert.equal(result.ok, false)
+      assert.equal(
+        dbFingerprint(user.id),
+        before,
+        'a refused save changed data',
+      )
+    },
+
+    async 'removing a logged exercise works, and its history stays intact'() {
+      // CHANGED (migration 20261012120000, ON DELETE SET NULL). Previously:
+      //   assert.equal(result.ok, false)
+      //   assert.match(result.error, /Lat Pulldown has logged workout history/)
+      //   assert.equal(logsFingerprint(), before)       // log rows untouched
+      //   assert.equal(<slot count>, '1')               // slot kept
+      // Now the removal succeeds; the slot goes, and the log keeps everything
+      // except its link back to the slot.
+      const setsBefore = setsFingerprint()
+      const draft = currentDraft()
+      const monday = draft.find((d) => d.day_of_week === 'monday')!
+      monday.exercises = monday.exercises.slice(1) // drop the first slot
+      const result = await save(draft)
+      assert.equal(result.ok, true, result.error)
+      assert.equal(
+        sqlValue(`select count(*) from public.program_exercises
+          where id = '${seeded.programExerciseIds.monday[0]}'`),
+        '0',
+      )
+      assert.equal(
+        sqlValue(`select coalesce(se.program_exercise_id::text, 'null') || ',' ||
+            e.name || ',' || se.exercise_order || ',' || se.prescribed_reps
+          from public.session_exercises se join public.exercises e on e.id = se.exercise_id
+          where se.session_id = '${doneSession}' and se.exercise_order = 1`),
+        'null,Lat Pulldown,1,3x10',
+      )
+      assert.equal(setsFingerprint(), setsBefore, 'logged sets changed')
+
+      const page = await ctx.newPage()
+      await page.goto(`${APP_URL}/history/2026-09-07`)
+      const text = (await page.locator('main').last().textContent()) ?? ''
+      assert.match(text, /Lat Pulldown/)
+      assert.match(text, /10 × 55 kg/)
+      await page.close()
+    },
+
+    async 'turning a logged day into an empty rest day works; its log survives'() {
+      // CHANGED (migration 20261012120000). Previously:
+      //   assert.equal(result.ok, false)
+      //   assert.equal(dbFingerprint(user.id), before)  // nothing changed
+      // Now the day becomes a rest day and its remaining slot is removed, while
+      // the session and every logged row stay, still tied to the day.
+      const draft = currentDraft()
+      const monday = draft.find((d) => d.day_of_week === 'monday')!
+      monday.is_rest_day = true
+      monday.exercises = []
+      const result = await save(draft)
+      assert.equal(result.ok, true, result.error)
+      assert.equal(
+        sqlValue(`select is_rest_day from public.program_days
+          where id = '${seeded.dayIds.monday}'`),
+        't',
+      )
+      assert.equal(
+        sqlValue(`select s.program_day_id || ',' || count(se.*) || ',' ||
+            count(*) filter (where se.program_exercise_id is null)
+          from public.sessions s join public.session_exercises se on se.session_id = s.id
+          where s.id = '${doneSession}' group by s.program_day_id`),
+        `${seeded.dayIds.monday},2,2`,
+      )
+    },
+
+    async 'removing an exercise that was never logged works'() {
+      const draft = currentDraft()
+      draft.find((d) => d.day_of_week === 'tuesday')!.exercises = []
+      const result = await save(draft)
+      assert.equal(result.ok, true, result.error)
+      assert.equal(
+        sqlValue(`select count(*) from public.program_exercises
+          where id = '${seeded.programExerciseIds.tuesday[0]}'`),
+        '0',
+      )
     },
   },
   {
@@ -185,14 +240,12 @@ export default suite(
         (r) => r.program_exercise_id === seeded.programExerciseIds.monday[0],
       )!
       must(
-        await user.client
-          .from('sets')
-          .insert({
-            session_exercise_id: lat.id,
-            set_number: 1,
-            reps_done: 10,
-            weight: 55,
-          }),
+        await user.client.from('sets').insert({
+          session_exercise_id: lat.id,
+          set_number: 1,
+          reps_done: 10,
+          weight: 55,
+        }),
       )
       ctx = await phoneContext()
       const page = await ctx.newPage()

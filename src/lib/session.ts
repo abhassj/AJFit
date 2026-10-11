@@ -15,8 +15,10 @@ import { getViewerDateKey } from '@/lib/viewer-time'
  * is what put "Back & Biceps" over a Shoulders & Legs session whenever someone
  * ran a different day's workout.
  *
- * Likewise the exercise name comes from the session_exercise's own snapshot
- * (exercise_id), not from whatever the program slot holds now.
+ * Likewise the exercise name, its order and its prescribed reps come from the
+ * session_exercise's own snapshot, not from whatever the program slot holds
+ * now — the slot may since have changed or been removed from the Split. Only
+ * rest_seconds is read live, because it drives the live rest timer.
  */
 const SESSION_SELECT = `
   id,
@@ -33,28 +35,25 @@ const SESSION_SELECT = `
     status,
     completed_at,
     comment,
+    exercise_order,
+    prescribed_reps,
     exercises ( name ),
-    program_exercises (
-      exercise_order,
-      prescribed_reps,
-      rest_seconds
-    ),
+    program_exercises ( rest_seconds ),
     sets ( id, set_number, reps_done, weight )
   )
 `
 
 type RawSessionExercise = {
   id: string
-  program_exercise_id: string
+  program_exercise_id: string | null
   status: SessionExercise['status']
   completed_at: string | null
   comment: string | null
+  exercise_order: number | null
+  prescribed_reps: string | null
   exercises: { name: string } | null
-  program_exercises: {
-    exercise_order: number
-    prescribed_reps: string | null
-    rest_seconds: number | null
-  } | null
+  /** Null once the slot is removed from the Split; only rest_seconds is live. */
+  program_exercises: { rest_seconds: number | null } | null
   sets: {
     id: string
     set_number: number
@@ -92,9 +91,9 @@ function shapeSession(row: {
         completed_at: se.completed_at,
         comment: se.comment,
         exercise_name: se.exercises?.name ?? 'Exercise',
-        prescribed_reps: se.program_exercises?.prescribed_reps ?? null,
+        prescribed_reps: se.prescribed_reps,
         rest_seconds: se.program_exercises?.rest_seconds ?? null,
-        exercise_order: se.program_exercises?.exercise_order ?? 0,
+        exercise_order: se.exercise_order ?? 0,
         sets: [...(se.sets ?? [])].sort((a, b) => a.set_number - b.set_number),
       }))
       .sort((a, b) => a.exercise_order - b.exercise_order),

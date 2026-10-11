@@ -93,6 +93,10 @@ export async function startBackfill(
       day.exercises.map((exercise) => ({
         session_id: session.id,
         program_exercise_id: exercise.id,
+        // Snapshot of what is being logged; see start/actions.ts.
+        exercise_id: exercise.exercise_id,
+        exercise_order: exercise.exercise_order,
+        prescribed_reps: exercise.prescribed_reps,
         status: 'pending' as const,
       })),
     )

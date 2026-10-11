@@ -119,14 +119,12 @@ export default suite(
         .from('session_exercises')
         .insert({ session_id: aIds.session, program_exercise_id: bIds.slot })
       assert.ok(seError, 'session_exercise into A’s session accepted')
-      const { error: setError } = await b.client
-        .from('sets')
-        .insert({
-          session_exercise_id: aIds.se,
-          set_number: 2,
-          reps_done: 1,
-          weight: 1,
-        })
+      const { error: setError } = await b.client.from('sets').insert({
+        session_exercise_id: aIds.se,
+        set_number: 2,
+        reps_done: 1,
+        weight: 1,
+      })
       assert.ok(setError, 'set into A’s session accepted')
     },
 
@@ -155,30 +153,47 @@ export default suite(
         .eq('id', aIds.session)
       await b.client.from('sets').delete().eq('id', aIds.set)
       // The live logger's write: upsert with ignoreDuplicates, on A's set id.
-      await b.client
-        .from('sets')
-        .upsert(
-          {
-            id: aIds.set,
-            session_exercise_id: bIds.se,
-            set_number: 1,
-            reps_done: 1,
-            weight: 1,
-          },
-          { onConflict: 'id', ignoreDuplicates: true },
-        )
-      await b.client
-        .from('sets')
-        .upsert(
-          {
-            id: aIds.set,
-            session_exercise_id: aIds.se,
-            set_number: 1,
-            reps_done: 1,
-            weight: 1,
-          },
-          { onConflict: 'id' },
-        )
+      await b.client.from('sets').upsert(
+        {
+          id: aIds.set,
+          session_exercise_id: bIds.se,
+          set_number: 1,
+          reps_done: 1,
+          weight: 1,
+        },
+        { onConflict: 'id', ignoreDuplicates: true },
+      )
+      await b.client.from('sets').upsert(
+        {
+          id: aIds.set,
+          session_exercise_id: aIds.se,
+          set_number: 1,
+          reps_done: 1,
+          weight: 1,
+        },
+        { onConflict: 'id' },
+      )
+    },
+
+    async 'B cannot point a row in B’s own session at A’s slot'() {
+      // Migration 20261012120000: WITH CHECK now requires the slot, if any, to
+      // belong to the caller. Before it, both of these were accepted.
+      const { error: insertError } = await b.client
+        .from('session_exercises')
+        .insert({ session_id: bIds.session, program_exercise_id: aIds.slot })
+      assert.ok(insertError, 'row pointing at A’s slot was inserted')
+      const { error: updateError } = await b.client
+        .from('session_exercises')
+        .update({ program_exercise_id: aIds.slot })
+        .eq('id', bIds.se)
+      assert.ok(updateError, 'row re-pointed at A’s slot')
+      // Detaching from a slot (null) stays allowed: it is what a removal does.
+      must(
+        await b.client
+          .from('session_exercises')
+          .update({ program_exercise_id: null })
+          .eq('id', bIds.se),
+      )
     },
 
     'after every attempt above, A’s data is byte-for-byte unchanged'() {
@@ -198,35 +213,56 @@ export default suite(
           where grantee = 'authenticated' and table_schema = 'public' and table_name = '${table}'
             and privilege_type in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')`)
         assert.equal(writes, '0', table)
+        // Migration 20261012120000 also revoked the latent REFERENCES and
+        // TRIGGER grants, so SELECT is now the only privilege left.
+        assert.equal(
+          sqlValue(`select string_agg(privilege_type, ',') from information_schema.role_table_grants
+            where grantee = 'authenticated' and table_schema = 'public' and table_name = '${table}'`),
+          'SELECT',
+          table,
+        )
       }
     },
 
-    'ON DELETE: logs restrict slot deletion; a deleted day nulls the session'() {
+    'ON DELETE: a removed slot or day only unlinks the history pointing at it'() {
       const rule = (name: string) =>
         sqlValue(
           `select confdeltype from pg_constraint where conname = '${name}'`,
         )
-      assert.equal(rule('session_exercises_program_exercise_id_fkey'), 'r') // RESTRICT
+      // CHANGED by migration 20261012120000. Previously:
+      //   assert.equal(rule('session_exercises_program_exercise_id_fkey'), 'r') // RESTRICT
+      assert.equal(rule('session_exercises_program_exercise_id_fkey'), 'n') // SET NULL
       assert.equal(rule('sessions_program_day_id_fkey'), 'n') // SET NULL
       assert.equal(rule('program_exercises_program_day_id_fkey'), 'c') // CASCADE
       assert.equal(rule('session_exercises_exercise_id_fkey'), 'r') // RESTRICT
     },
 
-    async 'deleting a logged slot or its day is refused; history survives'() {
-      const { error: slotError } = await a.client
-        .from('program_exercises')
-        .delete()
-        .eq('id', aIds.slot)
-      assert.ok(slotError, 'logged slot was deleted')
-      const { error: dayError } = await a.client
-        .from('program_days')
-        .delete()
-        .eq('id', aIds.day)
-      assert.ok(dayError, 'day with a logged slot was deleted')
+    async 'deleting a logged slot, then its day, keeps the history'() {
+      // CHANGED by migration 20261012120000. Previously both deletes were
+      // refused:
+      //   assert.ok(slotError, 'logged slot was deleted')
+      //   assert.ok(dayError, 'day with a logged slot was deleted')
+      // Now both succeed and the log rows lose only their links.
+      must(
+        await a.client.from('program_exercises').delete().eq('id', aIds.slot),
+      )
+      assert.equal(
+        sqlValue(`select coalesce(program_exercise_id::text, 'null') || ',' || (exercise_id is not null)::text
+          from public.session_exercises where id = '${aIds.se}'`),
+        'null,true',
+      )
+      must(await a.client.from('program_days').delete().eq('id', aIds.day))
+      assert.equal(
+        sqlValue(`select coalesce(program_day_id::text, 'null') from public.sessions
+          where id = '${aIds.session}'`),
+        'null',
+      )
       assert.equal(
         sqlValue(`select count(*) from public.sets where id = '${aIds.set}'`),
         '1',
       )
+      // This test changed A on purpose; later tests compare against this.
+      aBefore = dbFingerprint(a.id)
     },
 
     async 'a skipped day’s session survives its template day being deleted'() {

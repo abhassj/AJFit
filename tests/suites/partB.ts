@@ -147,16 +147,19 @@ export default suite(
           .update({ status: 'completed' })
           .eq('id', sessionId),
       )
-      // The day's slots are referenced by session_exercises (RESTRICT), so a
-      // logged day cannot be deleted out from under its history.
-      const { error } = await user.client
-        .from('program_days')
-        .delete()
-        .eq('id', seeded.dayIds.wednesday)
-      assert.ok(error, 'deleting a logged day should be refused')
+      // CHANGED by migration 20261012120000 (slot link is ON DELETE SET NULL).
+      // Previously a logged day could not be deleted:
+      //   assert.ok(error, 'deleting a logged day should be refused')
+      // Now the delete succeeds and the session survives, unlinked.
+      must(
+        await user.client
+          .from('program_days')
+          .delete()
+          .eq('id', seeded.dayIds.wednesday),
+      )
       assert.equal(
         sqlValue(
-          `select count(*) from public.sessions where id = '${sessionId}'`,
+          `select count(*) from public.sessions where id = '${sessionId}' and program_day_id is null`,
         ),
         '1',
       )
