@@ -70,7 +70,7 @@ function argsFor(name: string): unknown[] {
     updateSet: [ids.doneSet, 1, 1],
     setExerciseStatus: [ids.liveSe, 'skipped'],
     saveComment: [ids.liveSe, 'pwned'],
-    addPausedSeconds: [ids.liveSession, 999],
+    setPausedTotal: [ids.liveSession, 999],
     finishSession: [ids.liveSession, 0],
     markSessionSkipped: [ids.liveSession],
     // history

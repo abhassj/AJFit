@@ -145,14 +145,18 @@ export function SessionRunner({
   /** Applies writes to the screen and queues them for the server. */
   function commit(...writes: SessionWrite[]) {
     let next = latest.current
-    let paused = 0
+    let pausedTotal: number | null = null
     for (const write of writes) {
       next = applyWrite(next, write)
-      if (write.kind === 'pause') paused += write.seconds
+      if (write.kind === 'pause') pausedTotal = write.totalSeconds
     }
     latest.current = next
     setExercises(next)
-    if (paused) setPausedSeconds((s) => s + paused)
+    // Totals only grow; a replayed one the server already had changes nothing.
+    if (pausedTotal !== null) {
+      const total = pausedTotal
+      setPausedSeconds((s) => Math.max(s, total))
+    }
     queue.enqueue(...writes)
   }
 
@@ -214,7 +218,7 @@ export function SessionRunner({
       (Date.now() - new Date(pausedSince).getTime()) / 1000,
     )
     setPausedSince(null)
-    commit({ kind: 'pause', seconds: elapsed })
+    commit({ kind: 'pause', totalSeconds: pausedSeconds + elapsed })
   }
 
   /**
@@ -222,12 +226,15 @@ export function SessionRunner({
    * summary would be rendered from a log that is still missing sets.
    */
   async function close(
-    action: (trailingPause: number) => Promise<{ ok: boolean; error?: string }>,
+    action: (pausedTotal: number) => Promise<{ ok: boolean; error?: string }>,
   ) {
     if (finishing) return
+    // The whole paused time, including a pause still running: absolute, so a
+    // retried Finish cannot add the trailing pause twice.
     const trailing = pausedSince
       ? Math.floor((Date.now() - new Date(pausedSince).getTime()) / 1000)
       : 0
+    const pausedTotal = pausedSeconds + trailing
     setError(null)
     setConfirmEmptyFinish(false)
     setFinishing(true)
@@ -242,7 +249,7 @@ export function SessionRunner({
     setPausedSince(null)
     startTransition(async () => {
       try {
-        const result = await action(trailing)
+        const result = await action(pausedTotal)
         if (!result.ok) {
           setError(result.error ?? 'Could not finish the session.')
           setFinishing(false)
@@ -272,7 +279,7 @@ export function SessionRunner({
       setConfirmEmptyFinish(true)
       return
     }
-    void close((trailing) => finishSession(session.id, trailing))
+    void close((pausedTotal) => finishSession(session.id, pausedTotal))
   }
 
   return (
@@ -354,7 +361,9 @@ export function SessionRunner({
             <div className="mt-3 grid grid-cols-2 gap-2.5">
               <ActionButton
                 onClick={() =>
-                  void close((trailing) => finishSession(session.id, trailing))
+                  void close((pausedTotal) =>
+                    finishSession(session.id, pausedTotal),
+                  )
                 }
               >
                 Finish Anyway

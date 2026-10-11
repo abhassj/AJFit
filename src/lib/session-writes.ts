@@ -1,8 +1,8 @@
 import {
-  addPausedSeconds,
   logSet,
   saveComment,
   setExerciseStatus,
+  setPausedTotal,
   updateSet,
   type ActionResult,
 } from '@/app/(app)/start/actions'
@@ -35,6 +35,6 @@ export function runWrite(
     case 'comment':
       return saveComment(write.exerciseId, write.comment)
     case 'pause':
-      return addPausedSeconds(sessionId, write.seconds)
+      return setPausedTotal(sessionId, write.totalSeconds)
   }
 }

@@ -8,7 +8,7 @@ import { getOrCreateProgram } from '@/lib/program'
 import { DAY_LABELS } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
 import { getWeekLocks } from '@/lib/week-lock'
-import { intervalToSeconds, secondsToInterval } from '@/lib/session-types'
+import { secondsToInterval } from '@/lib/session-types'
 import { getViewerDateKey, getViewerDayOfWeek } from '@/lib/viewer-time'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -296,36 +296,35 @@ export async function saveComment(
   }
 }
 
+/** Longest a session's total pause can plausibly be: a full day. */
+const PAUSE_TOTAL_MAX = 24 * 60 * 60
+
+function parsePauseTotal(seconds: number): number | null {
+  if (!Number.isFinite(seconds) || seconds < 0 || seconds > PAUSE_TOTAL_MAX) {
+    return null
+  }
+  return Math.floor(seconds)
+}
+
 /**
- * Accumulates a completed pause into paused_duration.
+ * Records the session's total paused time, as an absolute value.
  *
- * The schema has no "paused since" column, so the client holds the in-flight
- * pause and reports its length on resume (or on finish, if the user finishes
- * while still paused). Read-modify-write is safe here because a session belongs
- * to one user on one device at a time.
+ * This used to ADD the length of the pause just ended to whatever the
+ * database held (read, add, write back). That was not safe to repeat: a save
+ * whose reply was lost, retried — or replayed after a stale-deploy reload —
+ * counted the same pause twice. Sending the client's running total instead
+ * makes every retry and replay a no-op, and saves the read. The client is the
+ * only writer of this value, and its queue sends totals in the order they
+ * grew, so the last write is always the largest.
  */
-export async function addPausedSeconds(
+export async function setPausedTotal(
   sessionId: string,
-  seconds: number,
+  totalSeconds: number,
 ): Promise<ActionResult> {
   try {
-    if (!Number.isFinite(seconds) || seconds <= 0) return { ok: true }
+    const total = parsePauseTotal(totalSeconds)
+    if (total === null) return fail('Invalid pause length.')
     const { supabase } = await requireSession()
-
-    const { data: current, error: readError } = await supabase
-      .from('sessions')
-      .select('paused_duration')
-      .eq('id', sessionId)
-      .single()
-
-    if (readError || !current) {
-      return fail(
-        `Could not read the timer: ${readError?.message ?? 'unknown'}`,
-      )
-    }
-
-    const total =
-      intervalToSeconds(current.paused_duration) + Math.floor(seconds)
 
     const { error } = await supabase
       .from('sessions')
@@ -333,12 +332,9 @@ export async function addPausedSeconds(
       .eq('id', sessionId)
 
     if (error) return fail(`Could not update the timer: ${error.message}`)
-
     return { ok: true }
   } catch (e) {
-    // requireSession() redirects an expired session, and redirect() signals by
-    // throwing. Without this the catch would swallow it and report the
-    // framework's internal marker as a failed save.
+    // requireSession() redirects an expired session; let it through.
     unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }
@@ -372,21 +368,28 @@ export async function markSessionSkipped(
   }
 }
 
-/** Closes the session out, folding in any pause still running. */
+/**
+ * Closes the session out. `pausedTotalSeconds` is the session's whole paused
+ * time including any pause still running, as an absolute value (see
+ * setPausedTotal), so finishing twice — a retry after a lost reply — writes
+ * the same row twice rather than adding the trailing pause again.
+ */
 export async function finishSession(
   sessionId: string,
-  trailingPausedSeconds = 0,
+  pausedTotalSeconds: number,
 ): Promise<ActionResult> {
   try {
-    if (trailingPausedSeconds > 0) {
-      const result = await addPausedSeconds(sessionId, trailingPausedSeconds)
-      if (!result.ok) return result
-    }
-
+    const total = parsePauseTotal(pausedTotalSeconds)
+    if (total === null) return fail('Invalid pause length.')
     const { supabase } = await requireSession()
+
     const { error } = await supabase
       .from('sessions')
-      .update({ status: 'completed', end_time: new Date().toISOString() })
+      .update({
+        status: 'completed',
+        end_time: new Date().toISOString(),
+        paused_duration: secondsToInterval(total),
+      })
       .eq('id', sessionId)
 
     if (error) return fail(`Could not finish the session: ${error.message}`)

@@ -22,7 +22,13 @@ import {
   startTodaysWorkout,
 } from '../lib/browser'
 import { suite } from '../lib/harness'
-import { newUser, seedProgram, sql, type TestUser } from '../lib/local'
+import {
+  newUser,
+  seedProgram,
+  sql,
+  sqlValue,
+  type TestUser,
+} from '../lib/local'
 
 const DAYS = [
   'monday',
@@ -45,6 +51,14 @@ async function userWithSplit(tag: string): Promise<TestUser> {
     ),
   })
   return user
+}
+
+/** The session's paused_duration in whole seconds. */
+function pausedInDb(userId: string): number {
+  return Number(
+    sqlValue(`select extract(epoch from paused_duration)::int from public.sessions
+      where user_id = '${userId}'`),
+  )
 }
 
 function setsInDb(userId: string) {
@@ -171,6 +185,115 @@ export default suite(
         await page.getByRole('button', { name: 'Retry' }).click()
         await waitFor(() => setsInDb(user.id).length === 1)
         assert.deepEqual(setsInDb(user.id), [['1', '12', '30']])
+      } finally {
+        await ctx.close()
+      }
+    },
+
+    async 'a pause whose reply was lost is counted once after Retry'() {
+      const user = await userWithSplit('pauselost')
+      const ctx = await phoneContext()
+      const page = await ctx.newPage()
+      try {
+        await signIn(page, user)
+        await startTodaysWorkout(page)
+
+        await page.getByRole('button', { name: 'Pause' }).click()
+        await page.waitForTimeout(2300)
+
+        // The write reaches the server and is applied, but the reply never
+        // makes it back — the client cannot tell that from a failed save.
+        let loseReply = true
+        await page.route('**/start', async (route) => {
+          const req = route.request()
+          if (
+            loseReply &&
+            req.method() === 'POST' &&
+            req.headers()['next-action']
+          ) {
+            loseReply = false
+            await route.fetch()
+            return route.abort('internetdisconnected')
+          }
+          return route.continue()
+        })
+        await page.getByRole('button', { name: 'Resume' }).click()
+        await page.getByRole('button', { name: 'Retry' }).waitFor()
+        const afterFirst = pausedInDb(user.id)
+        assert.ok(afterFirst >= 2, `first write not applied: ${afterFirst}`)
+
+        await page.getByRole('button', { name: 'Retry' }).click()
+        await page
+          .getByRole('button', { name: 'Retry' })
+          .waitFor({ state: 'detached' })
+        // Replayed, not re-added: still the one pause of ~2s.
+        assert.equal(pausedInDb(user.id), afterFirst)
+        assert.ok(afterFirst < 4, `pause counted twice: ${afterFirst}s`)
+
+        // And Finish, which carries the absolute total too, keeps it once.
+        await page.getByRole('button', { name: 'Mark Complete' }).click()
+        await page.getByRole('button', { name: 'Finish' }).click()
+        await page.getByText('Workout Complete').waitFor()
+        assert.equal(pausedInDb(user.id), afterFirst)
+      } finally {
+        await ctx.close()
+      }
+    },
+
+    async 'a pause applied before a stale-deploy reload is counted once'() {
+      const user = await userWithSplit('pausestale')
+      const ctx = await phoneContext()
+      const page = await ctx.newPage()
+      try {
+        await signIn(page, user)
+        await startTodaysWorkout(page)
+        const reloads = countReloads(page)
+
+        await page.getByRole('button', { name: 'Pause' }).click()
+        await page.waitForTimeout(2300)
+
+        // The server applies the write, then the response says the action
+        // is unknown — the worst case for a replay after reload.
+        let stale = true
+        await page.route('**/start', async (route) => {
+          const req = route.request()
+          if (
+            stale &&
+            req.method() === 'POST' &&
+            req.headers()['next-action']
+          ) {
+            stale = false
+            await route.fetch()
+            return route.fulfill({
+              status: 404,
+              headers: {
+                'content-type': 'text/plain',
+                'x-nextjs-action-not-found': '1',
+              },
+              body: 'Server action not found.',
+            })
+          }
+          return route.continue()
+        })
+        await page.getByRole('button', { name: 'Resume' }).click()
+
+        await waitFor(() => reloads() >= 1)
+        await page.getByText('Logging Session').first().waitFor()
+        const applied = pausedInDb(user.id)
+        assert.ok(applied >= 2 && applied < 4, `paused ${applied}s`)
+        await waitFor(
+          () =>
+            sqlValue(`select count(*) from public.sessions
+              where user_id = '${user.id}'`) === '1',
+        )
+        // Let the replay land, then check it did not add the pause again.
+        await page.waitForTimeout(1500)
+        assert.equal(pausedInDb(user.id), applied)
+
+        await page.getByRole('button', { name: 'Mark Complete' }).click()
+        await page.getByRole('button', { name: 'Finish' }).click()
+        await page.getByText('Workout Complete').waitFor()
+        assert.equal(pausedInDb(user.id), applied)
       } finally {
         await ctx.close()
       }

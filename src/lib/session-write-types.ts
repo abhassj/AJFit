@@ -39,7 +39,11 @@ export type SessionWrite =
       completedAt: string | null
     }
   | { kind: 'comment'; exerciseId: string; comment: string }
-  | { kind: 'pause'; seconds: number }
+  /**
+   * The session's whole paused time after a pause ends — absolute, never a
+   * delta, so replaying it cannot count the pause twice.
+   */
+  | { kind: 'pause'; totalSeconds: number }
 
 /** What the save-status banner calls a write. */
 export function describeWrite(write: SessionWrite): string {
