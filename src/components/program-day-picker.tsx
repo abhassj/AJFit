@@ -3,6 +3,7 @@
 import { useState } from 'react'
 
 import { CalendarIcon } from '@/components/icons'
+import { shortWeekday } from '@/lib/home-types'
 import {
   DAY_LABELS,
   DAYS_OF_WEEK,
@@ -27,12 +28,18 @@ export function ProgramDayPicker({
   defaultDay,
   onSelect,
   disabled,
+  locks = {},
 }: {
   program: Program
   selected: DayOfWeek
   defaultDay: DayOfWeek
   onSelect: (day: DayOfWeek) => void
   disabled?: boolean
+  /**
+   * program_day id → date completed this week. Done days are shown green and
+   * cannot be picked again until Monday (decision D6).
+   */
+  locks?: Record<string, string>
 }) {
   const [open, setOpen] = useState(false)
   const isDefault = selected === defaultDay
@@ -64,7 +71,8 @@ export function ProgramDayPicker({
         {DAYS_OF_WEEK.map((dow) => {
           const day = program.days.find((d) => d.day_of_week === dow)
           const count = day?.exercises.length ?? 0
-          const unavailable = !day || day.is_rest_day || count === 0
+          const doneOn = day?.id ? locks[day.id] : undefined
+          const unavailable = !day || day.is_rest_day || count === 0 || !!doneOn
           const active = dow === selected
 
           return (
@@ -77,11 +85,13 @@ export function ProgramDayPicker({
                 setOpen(false)
               }}
               className={`flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-left transition-colors ${
-                active
-                  ? 'bg-danger/15 text-primary ring-1 ring-danger/40'
-                  : unavailable
-                    ? 'text-faint'
-                    : 'text-primary hover:bg-card-raised'
+                doneOn
+                  ? 'bg-success/10 text-success'
+                  : active
+                    ? 'bg-danger/15 text-primary ring-1 ring-danger/40'
+                    : unavailable
+                      ? 'text-faint'
+                      : 'text-primary hover:bg-card-raised'
               }`}
             >
               <span className="w-10 shrink-0 text-[12px] font-bold tracking-[0.08em] uppercase">
@@ -90,8 +100,16 @@ export function ProgramDayPicker({
               <span className="min-w-0 flex-1 truncate text-[14px]">
                 {day?.title?.trim() || DAY_LABELS[dow]}
               </span>
-              <span className="shrink-0 text-[12px] text-faint">
-                {day?.is_rest_day ? 'Rest' : count === 0 ? 'Empty' : `${count}`}
+              <span
+                className={`shrink-0 text-[12px] ${doneOn ? 'font-semibold text-success' : 'text-faint'}`}
+              >
+                {doneOn
+                  ? `Done · ${shortWeekday(doneOn)}`
+                  : day?.is_rest_day
+                    ? 'Rest'
+                    : count === 0
+                      ? 'Empty'
+                      : `${count}`}
               </span>
               {dow === defaultDay && (
                 <span className="shrink-0 rounded-full border border-hairline px-1.5 py-0.5 text-[10px] font-semibold text-faint uppercase">

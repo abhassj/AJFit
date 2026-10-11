@@ -72,6 +72,7 @@ function argsFor(name: string): unknown[] {
     saveComment: [ids.liveSe, 'pwned'],
     addPausedSeconds: [ids.liveSession, 999],
     finishSession: [ids.liveSession, 0],
+    markSessionSkipped: [ids.liveSession],
     // history
     startBackfill: ['2026-09-01', 'monday'],
     deleteSet: [ids.doneSet, '2026-09-07'],

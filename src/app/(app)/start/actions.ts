@@ -7,6 +7,7 @@ import { requireSession, requireUser } from '@/lib/auth'
 import { getOrCreateProgram } from '@/lib/program'
 import { DAY_LABELS } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
+import { getWeekLocks } from '@/lib/week-lock'
 import { intervalToSeconds, secondsToInterval } from '@/lib/session-types'
 import { getViewerDateKey, getViewerDayOfWeek } from '@/lib/viewer-time'
 
@@ -74,6 +75,18 @@ export async function startSession(
     }
     if (day.exercises.length === 0) {
       return fail(`${label} has no exercises. Add some in My Workout Split.`)
+    }
+
+    /*
+     * Weekly lock (decision D6), enforced here as well as in the picker: a tab
+     * left open since before the day was finished still shows it as
+     * available, and the server is the only place that knows it is not.
+     */
+    const locks = await getWeekLocks(date)
+    if (locks[day.id]) {
+      return fail(
+        `${day.title?.trim() || label} is already done this week. Pick another day, or edit it from Home.`,
+      )
     }
 
     const { data: session, error } = await supabase
@@ -326,6 +339,34 @@ export async function addPausedSeconds(
     // requireSession() redirects an expired session, and redirect() signals by
     // throwing. Without this the catch would swallow it and report the
     // framework's internal marker as a failed save.
+    unstable_rethrow(e)
+    return fail(e instanceof Error ? e.message : 'Unexpected error')
+  }
+}
+
+/**
+ * Turns an in-progress session into a whole-day skip, for the finish guard
+ * (decision D8): finishing with nothing completed asks whether the day was
+ * really done, so Home does not paint a workout green that never happened.
+ * Logged rows are kept as they are; only the day's outcome changes.
+ */
+export async function markSessionSkipped(
+  sessionId: string,
+): Promise<ActionResult> {
+  try {
+    const { supabase } = await requireSession()
+    const { error } = await supabase
+      .from('sessions')
+      .update({ status: 'skipped', end_time: new Date().toISOString() })
+      .eq('id', sessionId)
+      .eq('status', 'in_progress')
+
+    if (error) return fail(`Could not skip the day: ${error.message}`)
+
+    refresh()
+    return { ok: true }
+  } catch (e) {
+    // requireSession() redirects an expired session; let it through.
     unstable_rethrow(e)
     return fail(e instanceof Error ? e.message : 'Unexpected error')
   }

@@ -25,12 +25,20 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
  * The ring is one SVG circle whose stroke-dashoffset is animated by Framer;
  * nothing redraws per frame in JS.
  */
+/*
+ * One control, two labels (decision D14). While the countdown runs it reads
+ * "Skip Rest"; once it reaches zero it reads "Next Set". Both do the same
+ * thing — close rest and put the keypad back on reps — because from the
+ * user's side it is one decision: "I'm ready". The old overlay had two buttons
+ * with two handlers that differed only in whether the keypad was reset.
+ */
 export function RestTimer({
   startedAt,
   seconds,
   exerciseName,
-  onSkip,
-  onNextSet,
+  nextSet,
+  totalSets,
+  onDone,
 }: {
   /**
    * Epoch ms when rest began. Passed in rather than read here: the clock is
@@ -40,8 +48,11 @@ export function RestTimer({
   startedAt: number
   seconds: number
   exerciseName: string
-  onSkip: () => void
-  onNextSet: () => void
+  /** The set the user is resting before. */
+  nextSet: number
+  /** From the prescription, when it names one ("3x10" → 3). */
+  totalSets: number | null
+  onDone: () => void
 }) {
   const now = useNow()
   const reduced = useReducedMotion()
@@ -72,12 +83,17 @@ export function RestTimer({
     }
   }, [done])
 
+  const setLabel =
+    totalSets && nextSet <= totalSets
+      ? `Set ${nextSet} of ${totalSets}`
+      : `Set ${nextSet}`
+
   return (
     <m.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
+      transition={{ duration: reduced ? 0 : 0.3 }}
       className="fixed inset-0 z-[100] flex flex-col bg-black"
       data-testid="rest-timer"
       data-rest-done={done ? 'true' : 'false'}
@@ -92,16 +108,29 @@ export function RestTimer({
         priority
       />
 
-      {/* Content wrapper */}
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center p-6 pt-24">
-        <h2 className="mb-12 text-[16px] font-bold tracking-[0.2em] text-white/80 uppercase drop-shadow-md">
-          {done ? 'Rest Complete' : 'Rest Time'}
-        </h2>
+      <div className="relative z-10 flex flex-1 flex-col items-center px-6 pt-[calc(4.5rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))]">
+        <p className="label-caps text-white/70">
+          {done ? 'Rest complete' : 'Resting'}
+        </p>
+        <p className="mt-2 max-w-full truncate text-center text-[17px] font-semibold text-white">
+          {exerciseName}
+          <span className="text-white/60"> · {setLabel}</span>
+        </p>
 
-        <div className="relative flex h-[320px] w-[320px] items-center justify-center rounded-full bg-black/40 backdrop-blur-xl shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+        {/*
+         * The pulse is a transform (scale) on the ring's wrapper, so it stays on
+         * the compositor; reduced motion gets the colour change alone.
+         */}
+        <m.div
+          className="relative mt-12 flex aspect-square w-full max-w-[300px] items-center justify-center rounded-full bg-black/40 shadow-[0_0_40px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+          animate={
+            done && !reduced ? { scale: [1, 1.05, 1, 1.05, 1] } : { scale: 1 }
+          }
+          transition={{ duration: 1.2, ease: 'easeInOut' }}
+        >
           <svg
             viewBox="0 0 320 320"
-            className="absolute inset-0 h-full w-full -rotate-90 drop-shadow-[0_0_12px_rgba(240,60,60,0.3)]"
+            className="absolute inset-0 h-full w-full -rotate-90"
             aria-hidden
           >
             <circle
@@ -109,7 +138,7 @@ export function RestTimer({
               cy="160"
               r={RADIUS}
               fill="none"
-              stroke="rgba(255,255,255,0.05)"
+              stroke="rgba(255,255,255,0.06)"
               strokeWidth="12"
             />
             <m.circle
@@ -128,43 +157,35 @@ export function RestTimer({
             />
           </svg>
 
-          <div className="flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center">
             <p
-              className="font-mono text-[84px] leading-none font-black tracking-tighter text-white tabular-nums drop-shadow-xl"
+              className="font-mono text-[76px] leading-none font-black tracking-tighter text-white tabular-nums"
               aria-live="polite"
             >
               {formatDuration(Math.ceil(remaining)).slice(3)}
             </p>
-            <p className="mt-4 text-[16px] font-semibold text-danger drop-shadow-md">
-              {done ? 'Ready for the next set' : `${seconds} sec`}
+            <p
+              className={`mt-3 text-[15px] font-semibold ${done ? 'text-success' : 'text-white/60'}`}
+            >
+              {done
+                ? 'Ready when you are'
+                : `of ${formatDuration(seconds).slice(3)}`}
             </p>
           </div>
-        </div>
+        </m.div>
 
-        <p className="mt-12 text-[15px] leading-relaxed text-white/60">
-          {done ? 'Rest finished for ' : 'Resting after '}
-          <span className="font-semibold text-white/90">{exerciseName}</span>
-        </p>
-
-        <div className="mt-auto w-full grid grid-cols-2 gap-4 pb-8">
-          <button
-            onClick={onSkip}
-            className="flex h-16 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 text-[17px] font-bold text-white backdrop-blur-md transition-all active:scale-95 active:bg-white/10"
-          >
-            Skip Rest
-          </button>
-          <button
-            onClick={onNextSet}
-            className={`flex h-16 items-center justify-center gap-2 rounded-2xl border text-[17px] font-bold text-white backdrop-blur-md transition-all active:scale-95 ${
-              done
-                ? 'border-success/40 bg-success/30 shadow-[0_0_20px_rgba(34,197,94,0.3)]'
-                : 'border-danger/40 bg-danger/30 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-            }`}
-          >
-            Next Set
-            <ChevronRightIcon className="h-5 w-5" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onDone}
+          className={`mt-auto flex h-16 w-full items-center justify-center gap-2 rounded-2xl border text-[18px] font-bold text-white transition-colors active:scale-[0.98] ${
+            done
+              ? 'border-success/50 bg-success/30'
+              : 'border-white/15 bg-white/10'
+          }`}
+        >
+          {done ? 'Next Set' : 'Skip Rest'}
+          {done && <ChevronRightIcon className="h-5 w-5" />}
+        </button>
       </div>
     </m.div>
   )

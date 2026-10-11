@@ -133,3 +133,22 @@ export function formatLongDate(key: string): string {
     year: 'numeric',
   })
 }
+
+/** A YYYY-MM-DD key as a local Date at midnight. */
+export function parseDateKey(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+/** The Monday and Sunday (YYYY-MM-DD) of the week containing `key`. */
+export function weekBounds(key: string): { start: string; end: string } {
+  const monday = startOfWeek(parseDateKey(key))
+  return { start: dateKey(monday), end: dateKey(addDays(monday, 6)) }
+}
+
+const SHORT_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** "Mon" for a YYYY-MM-DD key. Fixed English, matching the rest of the UI. */
+export function shortWeekday(key: string): string {
+  return SHORT_WEEKDAYS[parseDateKey(key).getDay()]
+}

@@ -15,6 +15,21 @@ const nextConfig: NextConfig = {
    * surfaces compile and runtime errors with the indicator hidden.
    */
   devIndicators: false,
+  /*
+   * Version skew. With a deployment id, a page from an older deploy that
+   * navigates gets a full reload onto the current one instead of mixing old
+   * client code with new server code. Vercel sets NEXT_DEPLOYMENT_ID itself
+   * when Skew Protection is enabled (Pro and Enterprise plans); that id must
+   * win, so this only fills in when it is absent. The commit SHA is unique per
+   * deploy and stays within Vercel's 32-character limit when shortened.
+   *
+   * Server Actions are covered separately: their ids change every build, and
+   * the session runner recovers from a stale one by saving its unsaved sets,
+   * reloading and replaying them (src/lib/use-write-queue.ts).
+   */
+  deploymentId: process.env.NEXT_DEPLOYMENT_ID
+    ? undefined
+    : process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12),
   images: {
     // AVIF first: the backdrop is a large flat-black photograph, which is
     // exactly the case AVIF compresses far better than WebP.

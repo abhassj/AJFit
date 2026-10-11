@@ -5,6 +5,7 @@ import { getProgramDay } from '@/lib/program'
 import { DAYS_OF_WEEK } from '@/lib/program-types'
 import { getSessionForDate } from '@/lib/session'
 import { getViewerDateKey } from '@/lib/viewer-time'
+import { getWeekLocks } from '@/lib/week-lock'
 
 type PageProps = { params: Promise<{ date: string }> }
 
@@ -28,10 +29,11 @@ export default async function DayPage({ params }: PageProps) {
   if (Number.isNaN(parsed.getTime())) notFound()
 
   const dow = DAYS_OF_WEEK[(parsed.getDay() + 6) % 7]
-  const [session, { program }, today] = await Promise.all([
+  const [session, { program }, today, weekLocks] = await Promise.all([
     getSessionForDate(date),
     getProgramDay(dow),
     getViewerDateKey(),
+    getWeekLocks(date),
   ])
 
   return (
@@ -41,6 +43,7 @@ export default async function DayPage({ params }: PageProps) {
       program={program}
       calendarDow={dow}
       isFuture={date > today}
+      weekLocks={weekLocks}
     />
   )
 }

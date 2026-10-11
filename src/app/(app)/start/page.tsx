@@ -3,7 +3,9 @@ import { SessionSummary, StartWorkout } from '@/components/start-workout'
 import { pageTitle } from '@/lib/brand'
 import { getOrCreateProgram } from '@/lib/program'
 import { DAY_LABELS } from '@/lib/program-types'
+import { getPersonalRecords } from '@/lib/prs'
 import { getSessionForDate } from '@/lib/session'
+import { getWeekLocks } from '@/lib/week-lock'
 import { sessionHeading } from '@/lib/session-types'
 import { getViewerDayOfWeek } from '@/lib/viewer-time'
 
@@ -29,8 +31,18 @@ export default async function StartPage() {
    * before a session is started.
    */
   if (session && session.status === 'in_progress') {
+    // One call for every exercise on screen, excluding this session, so each
+    // PR shown is the one to beat.
+    const records = await getPersonalRecords(
+      session.exercises.map((e) => e.exercise_name),
+      session.id,
+    )
     return (
-      <SessionRunner session={session} dayTitle={sessionHeading(session)} />
+      <SessionRunner
+        session={session}
+        dayTitle={sessionHeading(session)}
+        records={records}
+      />
     )
   }
 
@@ -40,5 +52,20 @@ export default async function StartPage() {
     )
   }
 
-  return <StartWorkout program={program} todayDow={dow} dayLabel={dayLabel} />
+  const [locks, records] = await Promise.all([
+    getWeekLocks(),
+    getPersonalRecords(
+      program.days.flatMap((d) => d.exercises.map((e) => e.exercise_name)),
+    ),
+  ])
+
+  return (
+    <StartWorkout
+      program={program}
+      todayDow={dow}
+      dayLabel={dayLabel}
+      locks={locks}
+      records={records}
+    />
+  )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
 
 import { skipDay, startSession } from '@/app/(app)/start/actions'
@@ -11,17 +12,27 @@ import { useUnits } from '@/components/units-provider'
 import { formatClockTime, formatDuration } from '@/lib/session-types'
 import { displayWeight } from '@/lib/units'
 import type { WorkoutSession } from '@/lib/session-types'
+import { shortWeekday } from '@/lib/home-types'
+import type { PersonalRecord } from '@/lib/pr-types'
+import { formatWeight } from '@/lib/units'
 
 /** Pre-session screen: confirm and start, or explicitly skip the whole day. */
 export function StartWorkout({
   program,
   todayDow,
   dayLabel,
+  locks,
+  records,
 }: {
   program: Program
   todayDow: DayOfWeek
   dayLabel: string
+  /** program_day id → date completed, for this Mon–Sun week (decision D6). */
+  locks: Record<string, string>
+  /** Personal records by exercise name. */
+  records: Record<string, PersonalRecord>
 }) {
+  const { weight: unit } = useUnits()
   const [confirming, setConfirming] = useState(false)
   /*
    * Only an explicit choice is held in state. Copying todayDow into state was
@@ -38,6 +49,13 @@ export function StartWorkout({
   const day =
     program.days.find((d) => d.day_of_week === selectedDow) ?? program.days[0]
   const runningToday = selectedDow === todayDow
+  const doneOn = day.id ? locks[day.id] : undefined
+
+  const trainingDays = program.days.filter(
+    (d) => !d.is_rest_day && d.exercises.length > 0,
+  )
+  const weekComplete =
+    trainingDays.length > 0 && trainingDays.every((d) => locks[d.id])
 
   function run(fn: () => Promise<{ ok: true } | { ok: false; error: string }>) {
     setError(null)
@@ -45,6 +63,46 @@ export function StartWorkout({
       const result = await fn()
       if (!result.ok) setError(result.error)
     })
+  }
+
+  if (weekComplete) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-5 px-8 text-center">
+        <div className="surface flex h-16 w-16 items-center justify-center rounded-2xl">
+          <CheckIcon className="h-7 w-7 text-success" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-bold tracking-tight text-primary">
+            Week Complete
+          </h1>
+          <p className="mx-auto max-w-xs text-sm leading-relaxed text-secondary">
+            Every workout in your split is done this week. They unlock again on
+            Monday.
+          </p>
+        </div>
+        <ul className="surface w-full max-w-sm overflow-hidden rounded-2xl text-left">
+          {trainingDays.map((d) => (
+            <li
+              key={d.id}
+              className="border-t border-hairline/60 first:border-t-0"
+            >
+              <Link
+                href={`/history/${locks[d.id]}`}
+                className="flex items-center gap-3 px-5 py-3.5"
+              >
+                <CheckIcon className="h-4 w-4 shrink-0 text-success" />
+                <span className="min-w-0 flex-1 truncate text-[15px] text-primary">
+                  {d.title?.trim() || DAY_LABELS[d.day_of_week]}
+                </span>
+                <span className="text-[12px] font-semibold text-success">
+                  Done · {shortWeekday(locks[d.id])}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </main>
+    )
   }
 
   // A rest day is only a dead end while it is the one selected; the picker
@@ -71,6 +129,7 @@ export function StartWorkout({
             defaultDay={todayDow}
             onSelect={setChosenDow}
             disabled={pending}
+            locks={locks}
           />
         </div>
       </main>
@@ -99,6 +158,24 @@ export function StartWorkout({
         </div>
       )}
 
+      {doneOn && (
+        <Link
+          href={`/history/${doneOn}`}
+          className="mb-3 flex items-center gap-3 rounded-2xl border border-success/40 bg-success/10 px-5 py-3.5"
+        >
+          <CheckIcon className="h-5 w-5 shrink-0 text-success" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold text-success">
+              Done · {shortWeekday(doneOn)}
+            </span>
+            <span className="block text-[13px] text-secondary">
+              Already done this week. View or edit it on Home, or pick another
+              day below.
+            </span>
+          </span>
+        </Link>
+      )}
+
       {day.exercises.length === 0 ? (
         <p className="surface rounded-2xl px-5 py-6 text-center text-sm text-secondary">
           Nothing scheduled for {DAY_LABELS[selectedDow]}. Add exercises in My
@@ -125,6 +202,11 @@ export function StartWorkout({
                     </span>
                   )}
                 </span>
+                <span className="shrink-0 text-[12px] text-faint tabular-nums">
+                  {records[exercise.exercise_name]
+                    ? `PR ${formatWeight(records[exercise.exercise_name].weight_kg, unit)}`
+                    : 'No PR yet'}
+                </span>
               </li>
             ))}
           </ul>
@@ -137,6 +219,7 @@ export function StartWorkout({
         defaultDay={todayDow}
         onSelect={setChosenDow}
         disabled={pending}
+        locks={locks}
       />
 
       {/* Primary actions sit at the bottom, in the thumb zone. */}
@@ -164,7 +247,7 @@ export function StartWorkout({
             <ActionButton
               tone="danger"
               className="w-full"
-              disabled={pending || day.exercises.length === 0}
+              disabled={pending || day.exercises.length === 0 || !!doneOn}
               onClick={() => setConfirming(true)}
             >
               <span className="flex items-center gap-2">

@@ -64,3 +64,22 @@ export async function signIn(page: Page, user: TestUser) {
   await page.click('button[type=submit]')
   await page.waitForURL(`${APP_URL}/`)
 }
+
+/** Types reps, then weight, on the in-app keypad. */
+export async function keypad(page: Page, reps: string, weight: string) {
+  for (const k of reps) {
+    await page.getByRole('button', { name: k, exact: true }).click()
+  }
+  await page.getByRole('button', { name: /^Weight/ }).click()
+  for (const k of weight) {
+    await page.getByRole('button', { name: k, exact: true }).click()
+  }
+}
+
+/** Starts today's default workout from /start and waits for the runner. */
+export async function startTodaysWorkout(page: Page) {
+  await page.goto(`${APP_URL}/start`)
+  await page.getByRole('button', { name: 'Start Workout' }).click()
+  await page.getByRole('button', { name: 'Confirm Start' }).click()
+  await page.getByText('Logging Session').first().waitFor()
+}

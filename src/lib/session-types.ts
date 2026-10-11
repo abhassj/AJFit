@@ -128,3 +128,9 @@ export function intervalToSeconds(value: unknown): number {
 export function secondsToInterval(seconds: number): string {
   return `${Math.max(0, Math.floor(seconds))} seconds`
 }
+
+/** "3x10" → 3, "4 × 8-12" → 4; null when the prescription names no set count. */
+export function prescribedSetCount(prescribed: string | null): number | null {
+  const match = prescribed?.match(/^\s*(\d+)\s*[x×]/i)
+  return match ? Number(match[1]) : null
+}

@@ -57,12 +57,15 @@ export function DayLogger({
   program,
   calendarDow,
   isFuture,
+  weekLocks,
 }: {
   date: string
   session: WorkoutSession | null
   program: Program
   calendarDow: DayOfWeek
   isFuture: boolean
+  /** program_day id → date completed, for the Mon–Sun week of `date`. */
+  weekLocks: Record<string, string>
 }) {
   const [error, setError] = useState<string | null>(null)
   const [confirmingRest, setConfirmingRest] = useState(false)
@@ -74,6 +77,9 @@ export function DayLogger({
   // weekday, but a missed session may well have been a different day's workout.
   const day =
     program.days.find((d) => d.day_of_week === selectedDow) ?? program.days[0]
+  // Backfilling a workout already done that week is allowed — the earlier one
+  // may have been a different session — but worth a warning (decision D6).
+  const alreadyDoneOn = day.id ? weekLocks[day.id] : undefined
 
   function run(fn: () => Promise<Outcome>) {
     setError(null)
@@ -185,6 +191,17 @@ export function DayLogger({
               }}
               disabled={pending}
             />
+
+            {alreadyDoneOn && (
+              <p
+                role="status"
+                className="mt-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-[13px] leading-relaxed text-secondary"
+              >
+                {day.title?.trim() || DAY_LABELS[day.day_of_week]} was already
+                done that week, on {formatLongDate(alreadyDoneOn)}. You can
+                still log it here.
+              </p>
+            )}
 
             <div className="mt-2 space-y-2.5">
               {day.is_rest_day && !confirmingRest ? (

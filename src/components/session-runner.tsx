@@ -1,16 +1,10 @@
 'use client'
 
 import { AnimatePresence, m, useReducedMotion } from 'framer-motion'
-import { useMemo, useRef, useState, useTransition } from 'react'
+import { unstable_isUnrecognizedActionError } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 
-import {
-  addPausedSeconds,
-  finishSession,
-  logSet,
-  saveComment,
-  setExerciseStatus,
-  updateSet,
-} from '@/app/(app)/start/actions'
+import { finishSession, markSessionSkipped } from '@/app/(app)/start/actions'
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -24,15 +18,23 @@ import { RestTimer } from '@/components/rest-timer'
 import { ActionButton, Banner, TripleActionRow } from '@/components/ui'
 import { useUnits } from '@/components/units-provider'
 import { newId } from '@/lib/id'
+import { isNewRecord, type PersonalRecord } from '@/lib/pr-types'
 import {
   elapsedSeconds,
   formatClockTime,
   formatDuration,
+  prescribedSetCount,
   type SessionExercise,
   type SessionExerciseStatus,
   type WorkoutSession,
 } from '@/lib/session-types'
-import { displayWeight, toKg, type WeightUnit } from '@/lib/units'
+import {
+  applyWrite,
+  describeWrite,
+  runWrite,
+  type SessionWrite,
+} from '@/lib/session-writes'
+import { displayWeight, formatWeight, toKg, type WeightUnit } from '@/lib/units'
 import { useNow } from '@/lib/use-now'
 import { useWriteQueue, type SaveState } from '@/lib/use-write-queue'
 import { validateSetEntry } from '@/lib/validation'
@@ -41,15 +43,17 @@ import { validateSetEntry } from '@/lib/validation'
  * ============================================================================
  * Client state is the source of truth while a session is on screen.
  * ============================================================================
- * Every tap updates `exercises` here first and the screen answers at once; the
- * matching server write is queued behind it (src/lib/use-write-queue.ts) and
- * saves in the background, in order. Nothing in the tap path waits on the
- * network or re-renders the page from the server — that round trip is what
- * made logging feel slow.
+ * Every tap becomes a SessionWrite (src/lib/session-writes.ts) that is applied
+ * to `exercises` here first, so the screen answers at once, and then queued
+ * for the server (src/lib/use-write-queue.ts), which saves in the background,
+ * in order. Nothing in the tap path waits on the network or re-renders the
+ * page from the server — that round trip is what made logging feel slow.
  *
  * The server's copy (the `session` prop) seeds this state once. It is not
  * re-read mid-session, so a background re-render of the page can never snap
- * the screen back to an older version of what the user just did.
+ * the screen back to an older version of what the user just did. Writes left
+ * unsaved by a previous load of this page (a stale deploy's reload, or an
+ * accidental one) are replayed over it on mount.
  */
 
 type Handlers = {
@@ -71,9 +75,12 @@ type Handlers = {
 export function SessionRunner({
   session,
   dayTitle,
+  records,
 }: {
   session: WorkoutSession
   dayTitle: string
+  /** Personal records by exercise name, excluding this session. */
+  records: Record<string, PersonalRecord>
 }) {
   const [exercises, setExercises] = useState<SessionExercise[]>(
     session.exercises,
@@ -85,7 +92,7 @@ export function SessionRunner({
    * "Skip Exercise" would otherwise land on the exercise that was just
    * completed. Handlers check the live status here and ignore those taps.
    *
-   * Every change goes through patch(), which updates this ref and the state
+   * Every change goes through commit(), which updates this ref and the state
    * together, so the two never disagree.
    */
   const latest = useRef(session.exercises)
@@ -98,8 +105,13 @@ export function SessionRunner({
   )
   const [error, setError] = useState<string | null>(null)
   const [finishing, setFinishing] = useState(false)
+  const [confirmEmptyFinish, setConfirmEmptyFinish] = useState(false)
   const [, startTransition] = useTransition()
-  const queue = useWriteQueue()
+  const queue = useWriteQueue<SessionWrite>({
+    storageKey: `ajfit-pending-writes:${session.id}`,
+    run: (write) => runWrite(session.id, write),
+    label: describeWrite,
+  })
 
   const reduced = useReducedMotion()
 
@@ -130,49 +142,64 @@ export function SessionRunner({
   )
   const logged = exercises.filter((e) => e.status !== 'pending')
 
-  function patch(id: string, fn: (e: SessionExercise) => SessionExercise) {
-    latest.current = latest.current.map((e) => (e.id === id ? fn(e) : e))
-    setExercises(latest.current)
+  /** Applies writes to the screen and queues them for the server. */
+  function commit(...writes: SessionWrite[]) {
+    let next = latest.current
+    let paused = 0
+    for (const write of writes) {
+      next = applyWrite(next, write)
+      if (write.kind === 'pause') paused += write.seconds
+    }
+    latest.current = next
+    setExercises(next)
+    if (paused) setPausedSeconds((s) => s + paused)
+    queue.enqueue(...writes)
   }
+
+  /*
+   * Replay what an earlier load of this page left unsaved, oldest first and
+   * before anything new can be tapped. The writes go back through commit(),
+   * so they reach the screen and the queue exactly as they did originally.
+   */
+  const restored = useRef(false)
+  useEffect(() => {
+    if (restored.current) return
+    restored.current = true
+    const pending = queue.restore()
+    if (pending.length > 0) commit(...pending)
+    // Runs once on mount; commit and queue are stable for that purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handlers: Handlers = {
     logSet(exerciseId, reps, weightKg) {
       const exercise = latest.current.find((e) => e.id === exerciseId)
       if (!exercise || exercise.status !== 'pending') return
-      const set = {
-        id: newId(),
-        set_number: Math.max(0, ...exercise.sets.map((s) => s.set_number)) + 1,
-        reps_done: reps,
+      commit({
+        kind: 'logSet',
+        setId: newId(),
+        exerciseId,
+        setNumber: Math.max(0, ...exercise.sets.map((s) => s.set_number)) + 1,
+        reps,
         weight: weightKg,
-      }
-      patch(exerciseId, (e) => ({ ...e, sets: [...e.sets, set] }))
-      queue.enqueue(`Set ${set.set_number}`, () =>
-        logSet(set.id, exerciseId, set.set_number, reps, weightKg),
-      )
+      })
     },
     updateSet(exerciseId, setId, reps, weightKg) {
-      patch(exerciseId, (e) => ({
-        ...e,
-        sets: e.sets.map((s) =>
-          s.id === setId ? { ...s, reps_done: reps, weight: weightKg } : s,
-        ),
-      }))
-      queue.enqueue('Set correction', () => updateSet(setId, reps, weightKg))
+      commit({ kind: 'updateSet', setId, exerciseId, reps, weight: weightKg })
     },
     setStatus(exerciseId, status) {
       if (!isPending(exerciseId)) return
-      const completedAt = status === 'pending' ? null : new Date().toISOString()
-      patch(exerciseId, (e) => ({ ...e, status, completed_at: completedAt }))
-      queue.enqueue(status === 'skipped' ? 'Skip' : 'Completion', () =>
-        setExerciseStatus(exerciseId, status),
-      )
+      commit({
+        kind: 'status',
+        exerciseId,
+        status,
+        completedAt: status === 'pending' ? null : new Date().toISOString(),
+      })
     },
     saveComment(exerciseId, comment) {
       const exercise = latest.current.find((e) => e.id === exerciseId)
-      const next = comment.trim() || null
-      if (!exercise || exercise.comment === next) return
-      patch(exerciseId, (e) => ({ ...e, comment: next }))
-      queue.enqueue('Comment', () => saveComment(exerciseId, comment))
+      if (!exercise || exercise.comment === (comment.trim() || null)) return
+      commit({ kind: 'comment', exerciseId, comment })
     },
   }
 
@@ -187,20 +214,24 @@ export function SessionRunner({
       (Date.now() - new Date(pausedSince).getTime()) / 1000,
     )
     setPausedSince(null)
-    setPausedSeconds((s) => s + elapsed)
-    queue.enqueue('Pause', () => addPausedSeconds(session.id, elapsed))
+    commit({ kind: 'pause', seconds: elapsed })
   }
 
-  async function handleFinish() {
+  /**
+   * Runs a session-ending action once every queued write has landed — or the
+   * summary would be rendered from a log that is still missing sets.
+   */
+  async function close(
+    action: (trailingPause: number) => Promise<{ ok: boolean; error?: string }>,
+  ) {
     if (finishing) return
     const trailing = pausedSince
       ? Math.floor((Date.now() - new Date(pausedSince).getTime()) / 1000)
       : 0
     setError(null)
+    setConfirmEmptyFinish(false)
     setFinishing(true)
 
-    // Every queued write must land before the session is closed, or the
-    // summary would be rendered from a log that is still missing sets.
     const saved = await queue.flush()
     if (!saved) {
       setFinishing(false)
@@ -211,18 +242,37 @@ export function SessionRunner({
     setPausedSince(null)
     startTransition(async () => {
       try {
-        const result = await finishSession(session.id, trailing)
+        const result = await action(trailing)
         if (!result.ok) {
-          setError(result.error)
+          setError(result.error ?? 'Could not finish the session.')
           setFinishing(false)
         }
-      } catch {
+      } catch (e) {
+        // A deploy landed: this page's actions no longer exist. Nothing is
+        // queued at this point, so reloading onto the new build loses nothing;
+        // the session is still open there and Finish works again.
+        if (unstable_isUnrecognizedActionError(e)) {
+          window.location.reload()
+          return
+        }
         setError(
           'Could not reach the server. Check your connection and try again.',
         )
         setFinishing(false)
       }
     })
+  }
+
+  function handleFinish() {
+    /*
+     * Finishing with nothing completed would paint the day green on Home with
+     * no work behind it (decision D8), so ask what actually happened first.
+     */
+    if (!latest.current.some((e) => e.status === 'completed')) {
+      setConfirmEmptyFinish(true)
+      return
+    }
+    void close((trailing) => finishSession(session.id, trailing))
   }
 
   return (
@@ -288,6 +338,43 @@ export function SessionRunner({
             </ActionButton>
           </TripleActionRow>
         </div>
+
+        {confirmEmptyFinish && (
+          <div
+            role="alertdialog"
+            aria-label="No exercises completed"
+            className="mt-4 rounded-xl border border-hairline bg-card-raised p-4"
+          >
+            <p className="text-[15px] font-semibold text-primary">
+              No exercises completed.
+            </p>
+            <p className="mt-1 text-sm text-secondary">
+              Finish anyway, or mark the day skipped?
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2.5">
+              <ActionButton
+                onClick={() =>
+                  void close((trailing) => finishSession(session.id, trailing))
+                }
+              >
+                Finish Anyway
+              </ActionButton>
+              <ActionButton
+                tone="danger"
+                onClick={() => void close(() => markSessionSkipped(session.id))}
+              >
+                Mark Skipped
+              </ActionButton>
+            </div>
+            <button
+              type="button"
+              onClick={() => setConfirmEmptyFinish(false)}
+              className="mt-2 w-full py-2 text-[13px] font-semibold text-faint"
+            >
+              Keep logging
+            </button>
+          </div>
+        )}
       </section>
 
       {active ? (
@@ -323,6 +410,7 @@ export function SessionRunner({
                 total={exercises.length}
                 handlers={handlers}
                 disabled={finishing}
+                record={records[active.exercise_name]}
               />
             </m.div>
           </AnimatePresence>
@@ -494,12 +582,15 @@ function ExercisePanel({
   total,
   handlers,
   disabled,
+  record,
 }: {
   exercise: SessionExercise
   index: number
   total: number
   handlers: Handlers
   disabled: boolean
+  /** The record coming into this session; undefined when there is none. */
+  record: PersonalRecord | undefined
 }) {
   const { weight: unit } = useUnits()
   const [reps, setReps] = useState('')
@@ -583,10 +674,15 @@ function ExercisePanel({
             {canRest && `${exercise.rest_seconds}s rest`}
           </p>
         )}
+        <p className="mt-1 text-sm text-faint" data-testid="exercise-pr">
+          {record
+            ? `PR ${formatWeight(record.weight_kg, unit)}${record.reps ? ` × ${record.reps}` : ''}`
+            : 'No PR yet'}
+        </p>
 
         {exercise.sets.length > 0 && (
           <ul className="mt-3 space-y-1">
-            {exercise.sets.map((set) => (
+            {exercise.sets.map((set, i) => (
               <li
                 key={set.id}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] tabular-nums ${
@@ -596,6 +692,11 @@ function ExercisePanel({
                 }`}
               >
                 <span className="label-caps">Set {set.set_number}</span>
+                {isNewRecord(set, exercise.sets.slice(0, i), record) && (
+                  <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold tracking-wide text-success uppercase">
+                    New PR
+                  </span>
+                )}
                 <span className="ml-auto">
                   {set.reps_done ?? '—'} reps ×{' '}
                   {set.weight == null
@@ -633,10 +734,11 @@ function ExercisePanel({
             startedAt={restStartedAt}
             seconds={exercise.rest_seconds ?? 0}
             exerciseName={exercise.exercise_name}
-            // Skip returns to the current set without advancing anything.
-            onSkip={() => setRestStartedAt(null)}
-            // Next Set closes rest and puts the keypad straight back on reps.
-            onNextSet={() => {
+            nextSet={exercise.sets.length + 1}
+            totalSets={prescribedSetCount(exercise.prescribed_reps)}
+            // One button whatever the countdown says: close rest and put the
+            // keypad straight back on reps.
+            onDone={() => {
               setRestStartedAt(null)
               setField('reps')
             }}
