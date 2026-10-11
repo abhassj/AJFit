@@ -79,6 +79,64 @@ export async function saveProgram(
     }
   }
 
+  /*
+   * Decide what the draft removes, and refuse a removal that would destroy
+   * logged history, BEFORE writing anything.
+   *
+   * This check used to run last, after the name, every day row and every
+   * exercise update had already been written — so a refused save was half
+   * applied: marking a logged day as rest flipped its flag, the error said
+   * "Everything else was left unchanged", and the day's exercises stayed
+   * behind. Working out the removals from the program as loaded means a
+   * refusal now really does change nothing.
+   *
+   * A rest day keeps no exercises, so everything on one is a removal.
+   */
+  const keptIds = new Set(
+    days.flatMap((day) =>
+      day.is_rest_day ? [] : day.exercises.flatMap((e) => (e.id ? [e.id] : [])),
+    ),
+  )
+  const stale = program.days.flatMap((day) =>
+    day.exercises.filter((e) => !keptIds.has(e.id)),
+  )
+
+  if (stale.length > 0) {
+    /*
+     * session_exercises references program_exercises ON DELETE RESTRICT, so an
+     * exercise that has already been logged cannot be removed from the
+     * template without destroying that history. Detect it up front and name the
+     * offenders, rather than letting the save fail on a raw FK violation.
+     */
+    const { data: logged, error: loggedError } = await supabase
+      .from('session_exercises')
+      .select('program_exercise_id')
+      .in(
+        'program_exercise_id',
+        stale.map((e) => e.id),
+      )
+
+    if (loggedError) {
+      return {
+        ok: false,
+        error: `Could not check logged history: ${loggedError.message}`,
+      }
+    }
+
+    const blockedIds = new Set((logged ?? []).map((r) => r.program_exercise_id))
+    if (blockedIds.size > 0) {
+      const unique = [
+        ...new Set(
+          stale.filter((e) => blockedIds.has(e.id)).map((e) => e.exercise_name),
+        ),
+      ]
+      return {
+        ok: false,
+        error: `${unique.join(', ')} ${unique.length === 1 ? 'has' : 'have'} logged workout history and cannot be removed from the program. Nothing was changed.`,
+      }
+    }
+  }
+
   const { error: nameError } = await supabase
     .from('programs')
     .update({ name: parsedName.value })
@@ -166,68 +224,14 @@ export async function saveProgram(
   const failedDay = dayResults.find((r) => !r.ok)
   if (failedDay) return { ok: false, error: failedDay.error }
 
-  const keptExerciseIds = dayResults.flatMap((r) => (r.ok ? r.ids : []))
-
-  // Drop anything the draft removed. Scoped to this program's days so a bad
-  // draft can never reach another user's rows (RLS would refuse anyway).
-  const dayIds = [...dayIdByDow.values()]
-
-  let staleQuery = supabase
-    .from('program_exercises')
-    .select('id, exercises ( name )')
-    .in('program_day_id', dayIds)
-  if (keptExerciseIds.length > 0) {
-    staleQuery = staleQuery.not('id', 'in', `(${keptExerciseIds.join(',')})`)
-  }
-
-  const { data: stale, error: staleError } = await staleQuery
-  if (staleError) {
-    return {
-      ok: false,
-      error: `Could not reconcile the program: ${staleError.message}`,
-    }
-  }
-
-  const staleIds = (stale ?? []).map((row) => row.id)
-  if (staleIds.length > 0) {
-    /*
-     * session_exercises references program_exercises ON DELETE RESTRICT, so an
-     * exercise that has already been logged cannot be removed from the
-     * template without destroying that history. Detect it up front and name the
-     * offenders, rather than letting the save fail on a raw FK violation.
-     */
-    const { data: logged, error: loggedError } = await supabase
-      .from('session_exercises')
-      .select('program_exercise_id')
-      .in('program_exercise_id', staleIds)
-
-    if (loggedError) {
-      return {
-        ok: false,
-        error: `Could not check logged history: ${loggedError.message}`,
-      }
-    }
-
-    const blockedIds = new Set((logged ?? []).map((r) => r.program_exercise_id))
-    if (blockedIds.size > 0) {
-      const names = (stale ?? [])
-        .filter((row) => blockedIds.has(row.id))
-        .map(
-          (row) =>
-            (row.exercises as unknown as { name: string } | null)?.name ??
-            'an exercise',
-        )
-      const unique = [...new Set(names)]
-      return {
-        ok: false,
-        error: `${unique.join(', ')} ${unique.length === 1 ? 'has' : 'have'} logged workout history and cannot be removed from the program. Everything else was left unchanged.`,
-      }
-    }
-
+  if (stale.length > 0) {
     const { error: deleteError } = await supabase
       .from('program_exercises')
       .delete()
-      .in('id', staleIds)
+      .in(
+        'id',
+        stale.map((e) => e.id),
+      )
 
     if (deleteError) {
       return {

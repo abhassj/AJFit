@@ -199,3 +199,31 @@ export async function seedProgram(
 
   return { programId: program.id, dayIds, programExerciseIds }
 }
+
+/**
+ * A hash of every row a user owns, across all eight user tables. Equal before
+ * and after an attack means the attack changed nothing — including rows it
+ * might have added under the victim's sessions. Without a user, every row of
+ * every user table is hashed.
+ */
+export function dbFingerprint(userId?: string): string {
+  const own = (alias: string) => (userId ? `where ${alias} = '${userId}'` : '')
+  return (
+    sqlValue(`select md5(coalesce(string_agg(t, '|' order by t), '')) from (
+      select 'p:' || row(p.*)::text t from public.profiles p ${own('p.id')}
+      union all select 'w:' || row(w.*)::text from public.weight_logs w ${own('w.user_id')}
+      union all select 'g:' || row(g.*)::text from public.programs g ${own('g.user_id')}
+      union all select 'd:' || row(d.*)::text from public.program_days d
+        join public.programs g on g.id = d.program_id ${own('g.user_id')}
+      union all select 'x:' || row(x.*)::text from public.program_exercises x
+        join public.program_days d on d.id = x.program_day_id
+        join public.programs g on g.id = d.program_id ${own('g.user_id')}
+      union all select 's:' || row(s.*)::text from public.sessions s ${own('s.user_id')}
+      union all select 'e:' || row(e.*)::text from public.session_exercises e
+        join public.sessions s on s.id = e.session_id ${own('s.user_id')}
+      union all select 't:' || row(t.*)::text from public.sets t
+        join public.session_exercises e on e.id = t.session_exercise_id
+        join public.sessions s on s.id = e.session_id ${own('s.user_id')}
+    ) rows`) ?? ''
+  )
+}
