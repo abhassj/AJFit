@@ -1,0 +1,10 @@
+{
+  // Pushing main applies Supabase migrations to the live database, so it must
+  // only ever be a deliberate `git push`. The status-bar sync and the Source
+  // Control "Sync Changes" button both pull AND push in one click; three
+  // unintended production pushes came from them.
+  "git.enableStatusBarSync": false,
+  "git.showActionButton": {
+    "sync": false
+  }
+}
