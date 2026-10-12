@@ -7,7 +7,8 @@ import { MotionProvider } from '@/components/motion'
 import { TimezoneSync } from '@/components/timezone-sync'
 import { UnitsProvider } from '@/components/units-provider'
 import { getAuthUser } from '@/lib/auth'
-import { getProfile } from '@/lib/profile'
+import { OnboardingPrompt } from '@/components/onboarding-prompt'
+import { getLatestBodyweightKg, getProfile } from '@/lib/profile'
 import { DEFAULT_UNITS } from '@/lib/units'
 import { getViewerTimeZone } from '@/lib/viewer-time'
 
@@ -37,9 +38,14 @@ export default async function AppLayout({
    * by this — that one does need to propagate.
    */
   let profile = null
+  let onboardingWeightKg: number | null = null
   if (user) {
     try {
       profile = await getProfile()
+      // Only accounts that still owe onboarding pay for this lookup.
+      if (profile && !profile.onboarded_at) {
+        onboardingWeightKg = await getLatestBodyweightKg()
+      }
     } catch (e) {
       unstable_rethrow(e)
       console.error(
@@ -58,6 +64,23 @@ export default async function AppLayout({
        * first date is rendered rather than per-page.
        */}
       <TimezoneSync serverZone={await getViewerTimeZone()} />
+      {/*
+       * Existing accounts that predate onboarding get a dismissible prompt
+       * (D9). New accounts are sent to /onboarding after confirming their
+       * email instead, and the prompt never shows there.
+       */}
+      {profile && !profile.onboarded_at && (
+        <OnboardingPrompt
+          initial={{
+            displayName: profile.display_name,
+            motto: profile.motto,
+            weightKg: onboardingWeightKg,
+            heightCm: profile.height_cm,
+            weightUnit: profile.weight_unit,
+            heightUnit: profile.height_unit,
+          }}
+        />
+      )}
       <AppBackground />
       {/* Bottom padding clears the fixed nav, including the iOS home indicator. */}
       <div className="mx-auto min-h-dvh w-full max-w-lg pb-[calc(5.5rem+env(safe-area-inset-bottom))]">

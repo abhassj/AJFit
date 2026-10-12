@@ -1,14 +1,36 @@
 'use client'
 
+import Link from 'next/link'
 import { useRef, useState, useTransition } from 'react'
 
 import { logBodyweight, saveGoalBodyweight } from '@/app/(app)/actions'
-import { saveAvatarUrl, saveProfileDetails } from '@/app/(app)/profile/actions'
+import {
+  saveAvatarUrl,
+  saveHeight,
+  saveProfileDetails,
+  saveUnits,
+} from '@/app/(app)/profile/actions'
 import { Avatar } from '@/components/avatar'
+import { BmiRow } from '@/components/bmi-dialog'
+import {
+  HeightInput,
+  heightDraft,
+  parseHeightDraft,
+} from '@/components/height-input'
+import { ChevronRightIcon } from '@/components/icons'
+import { Segmented } from '@/components/segmented'
 import { ActionButton, Banner } from '@/components/ui'
+import { useUnits } from '@/components/units-provider'
 import type { ProfilePageData } from '@/lib/profile'
 import { createClient } from '@/lib/supabase/client'
-import { parseBodyweight } from '@/lib/validation'
+import {
+  displayWeight,
+  formatHeight,
+  formatWeight,
+  type HeightUnit,
+  type WeightUnit,
+} from '@/lib/units'
+import { parseBodyweightIn } from '@/lib/validation'
 
 type Outcome = { ok: true } | { ok: false; error: string }
 
@@ -16,12 +38,22 @@ const MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
 export function ProfileForm({ data }: { data: ProfilePageData }) {
   const { profile, email, bodyweight } = data
+  // What the shell renders with; updated by saveUnits revalidating the layout.
+  const units = useUnits()
+  const unit = units.weight
 
   const [displayName, setDisplayName] = useState(profile.display_name ?? '')
   const [motto, setMotto] = useState(profile.motto ?? '')
   const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url)
   const [weight, setWeight] = useState('')
-  const [goal, setGoal] = useState(profile.goal_bodyweight?.toString() ?? '')
+  // Goal shown in the user's unit; stored in kilograms.
+  const [goal, setGoal] = useState(
+    profile.goal_bodyweight == null
+      ? ''
+      : displayWeight(profile.goal_bodyweight, unit),
+  )
+  const [height, setHeight] = useState(heightDraft(profile.height_cm))
+  const [heightError, setHeightError] = useState<string | null>(null)
   const [weightError, setWeightError] = useState<string | null>(null)
   const [goalError, setGoalError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -200,6 +232,98 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
         </div>
       </section>
 
+      {/* Units and height. Display only: nothing stored is converted (D1). */}
+      <section className="surface rounded-2xl p-5">
+        <h2 className="label-caps">Units</h2>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-[15px] text-primary">Weight</span>
+          <Segmented<WeightUnit>
+            label="Weight unit"
+            value={units.weight}
+            disabled={busy}
+            options={[
+              { value: 'kg', label: 'kg' },
+              { value: 'lbs', label: 'lbs' },
+            ]}
+            onChange={(w) => {
+              // The goal field holds a typed number; re-express it.
+              if (profile.goal_bodyweight != null) {
+                setGoal(displayWeight(profile.goal_bodyweight, w))
+              }
+              run(() => saveUnits(w, units.height), `Weights now in ${w}.`)
+            }}
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-[15px] text-primary">Height</span>
+          <Segmented<HeightUnit>
+            label="Height unit"
+            value={units.height}
+            disabled={busy}
+            options={[
+              { value: 'cm', label: 'cm' },
+              { value: 'ft', label: 'ft' },
+            ]}
+            onChange={(h) =>
+              run(
+                () => saveUnits(units.weight, h),
+                h === 'cm' ? 'Height now in cm.' : 'Height now in feet.',
+              )
+            }
+          />
+        </div>
+
+        <div className="mt-4 flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <HeightInput
+              unit={units.height}
+              draft={height}
+              error={heightError}
+              idPrefix="profile-height"
+              onChange={(d) => {
+                setHeight(d)
+                setHeightError(null)
+              }}
+            />
+          </div>
+          <ActionButton
+            ariaLabel="Save height"
+            disabled={busy}
+            className="shrink-0 px-5"
+            onClick={() => {
+              const parsed = parseHeightDraft(height, units.height)
+              if (!parsed.ok) {
+                setHeightError(parsed.error)
+                return
+              }
+              run(
+                () => saveHeight(parsed.value),
+                `Height saved: ${formatHeight(parsed.value, units.height)}.`,
+              )
+            }}
+          >
+            Save
+          </ActionButton>
+        </div>
+      </section>
+
+      <BmiRow weightKg={bodyweight.current} heightCm={profile.height_cm} />
+
+      <Link
+        href="/profile/prs"
+        className="surface flex min-h-[56px] items-center gap-3 rounded-2xl px-5 py-3"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold text-primary">
+            Personal Records
+          </span>
+          <span className="block text-[13px] text-secondary">
+            Your heaviest set for every lift
+          </span>
+        </span>
+        <ChevronRightIcon className="h-4 w-4 text-faint" />
+      </Link>
+
       {/* Bodyweight — moved here from Home; this is now its only home. */}
       <section className="surface rounded-2xl p-5">
         <h2 className="label-caps">Bodyweight</h2>
@@ -207,7 +331,9 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
         <div className="mt-3 flex items-end justify-between gap-4">
           <div>
             <p className="font-mono text-[34px] leading-none font-bold text-primary tabular-nums">
-              {bodyweight.current ?? '—'}
+              {bodyweight.current == null
+                ? '—'
+                : formatWeight(bodyweight.current, unit)}
             </p>
             <p className="mt-1.5 text-[11px] font-semibold tracking-[0.1em] text-faint uppercase">
               {bodyweight.loggedOn
@@ -217,7 +343,9 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
           </div>
           <div className="text-right">
             <p className="font-mono text-lg font-bold text-secondary tabular-nums">
-              {profile.goal_bodyweight ?? '—'}
+              {profile.goal_bodyweight == null
+                ? '—'
+                : formatWeight(profile.goal_bodyweight, unit)}
             </p>
             <p className="mt-1 text-[11px] font-semibold tracking-[0.1em] text-faint uppercase">
               Goal
@@ -228,13 +356,14 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
         <GoalDelta
           current={bodyweight.current}
           goal={profile.goal_bodyweight}
+          unit={unit}
         />
 
         <div className="mt-4 space-y-3">
           <div>
             <div className="flex items-end gap-2">
               <label className="min-w-0 flex-1">
-                <span className="label-caps">Log today’s weight</span>
+                <span className="label-caps">Log today’s weight ({unit})</span>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -268,7 +397,8 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
                    * message appears where the user is looking; the action still
                    * re-checks, because it has to.
                    */
-                  const parsed = parseBodyweight(weight)
+                  // Typed in the user's unit; parsed to kilograms (D1).
+                  const parsed = parseBodyweightIn(weight, unit)
                   if (!parsed.ok) {
                     setWeightError(parsed.error)
                     return
@@ -297,7 +427,7 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
           <div>
             <div className="flex items-end gap-2">
               <label className="min-w-0 flex-1">
-                <span className="label-caps">Goal weight</span>
+                <span className="label-caps">Goal weight ({unit})</span>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -328,7 +458,7 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
                     run(() => saveGoalBodyweight(null), 'Goal cleared.')
                     return
                   }
-                  const parsed = parseBodyweight(goal)
+                  const parsed = parseBodyweightIn(goal, unit)
                   if (!parsed.ok) {
                     setGoalError(parsed.error)
                     return
@@ -358,9 +488,11 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
 function GoalDelta({
   current,
   goal,
+  unit,
 }: {
   current: number | null
   goal: number | null
+  unit: WeightUnit
 }) {
   if (current === null || goal === null) return null
   const delta = current - goal
@@ -369,7 +501,7 @@ function GoalDelta({
     <p className="mt-2 text-[13px] text-secondary">
       {Math.abs(delta) < 0.05
         ? 'At your goal.'
-        : `${Math.abs(delta).toFixed(1)} ${delta > 0 ? 'above' : 'below'} goal.`}
+        : `${formatWeight(Math.abs(delta), unit)} ${delta > 0 ? 'above' : 'below'} goal.`}
     </p>
   )
 }

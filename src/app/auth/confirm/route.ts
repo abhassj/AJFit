@@ -12,7 +12,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const tokenHash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null
-  const next = searchParams.get('next') ?? '/'
+  // Confirming an email is the first visit of a new account, so it goes to
+  // onboarding unless the link names somewhere else. Only same-origin paths.
+  const requested = searchParams.get('next')
+  const next =
+    requested && requested.startsWith('/') && !requested.startsWith('//')
+      ? requested
+      : '/onboarding'
 
   if (tokenHash && type) {
     const supabase = await createClient()

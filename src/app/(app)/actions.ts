@@ -3,16 +3,20 @@
 import { revalidatePath } from 'next/cache'
 
 import { requireUser } from '@/lib/auth'
+import { isPlausibleBodyweightKg } from '@/lib/validation'
 import { getViewerDateKey } from '@/lib/viewer-time'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
 const fail = (error: string): ActionResult => ({ ok: false, error })
 
-/** Records today's bodyweight as a new time-series entry (PRD §8.7). */
+/**
+ * Records today's bodyweight as a new time-series entry (PRD §8.7).
+ * `weight` is kilograms; the form converts from the user's unit (D1).
+ */
 export async function logBodyweight(weight: number): Promise<ActionResult> {
-  if (!Number.isFinite(weight) || weight <= 0) {
-    return fail('Enter a weight greater than zero.')
+  if (!isPlausibleBodyweightKg(weight)) {
+    return fail('Enter a realistic weight.')
   }
 
   const { supabase, user } = await requireUser()
@@ -39,8 +43,9 @@ export async function logBodyweight(weight: number): Promise<ActionResult> {
 export async function saveGoalBodyweight(
   goal: number | null,
 ): Promise<ActionResult> {
-  if (goal !== null && (!Number.isFinite(goal) || goal <= 0)) {
-    return fail('Enter a goal greater than zero.')
+  // Kilograms, like every stored weight.
+  if (goal !== null && !isPlausibleBodyweightKg(goal)) {
+    return fail('Enter a realistic goal.')
   }
 
   const { supabase, user } = await requireUser()

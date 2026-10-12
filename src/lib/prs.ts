@@ -47,3 +47,37 @@ export async function getPersonalRecords(
   }
   return out
 }
+
+export type RecordsByCategory = {
+  category: string
+  records: (PersonalRecord & { exercise_name: string })[]
+}[]
+
+/**
+ * Every personal record, grouped under the catalog's categories in their
+ * catalog order (D5: a lift listed in two categories appears in both, with
+ * the same record). One call to exercise_prs().
+ */
+export async function getRecordsByCategory(): Promise<RecordsByCategory> {
+  const { supabase } = await requireUser()
+  const { data, error } = await supabase.rpc('exercise_prs')
+  if (error)
+    throw new Error(`Failed to load personal records: ${error.message}`)
+
+  const groups = new Map<string, RecordsByCategory[number]>()
+  // The function already orders by category sort order, then name.
+  for (const row of (data ?? []) as Row[]) {
+    let group = groups.get(row.category_name)
+    if (!group) {
+      group = { category: row.category_name, records: [] }
+      groups.set(row.category_name, group)
+    }
+    group.records.push({
+      exercise_name: row.exercise_name,
+      weight_kg: Number(row.weight_kg),
+      reps: row.reps,
+      achieved_on: row.achieved_on,
+    })
+  }
+  return [...groups.values()]
+}

@@ -59,7 +59,8 @@ export async function signUp(
   }
 
   revalidatePath('/', 'layout')
-  redirect('/')
+  // A brand-new account sets up its profile before anything else.
+  redirect('/onboarding')
 }
 
 export async function signOut() {

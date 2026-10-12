@@ -124,3 +124,18 @@ export async function getProfilePageData(): Promise<ProfilePageData> {
     },
   }
 }
+
+/** The most recent bodyweight entry, kilograms; null when none is logged. */
+export const getLatestBodyweightKg = cache(async (): Promise<number | null> => {
+  const { supabase, user } = await getAuthUser()
+  if (!user) return null
+  const { data, error } = await supabase
+    .from('weight_logs')
+    .select('weight')
+    .order('log_date', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(`Failed to load bodyweight: ${error.message}`)
+  return data?.weight == null ? null : Number(data.weight)
+})

@@ -87,6 +87,19 @@ function argsFor(name: string): unknown[] {
     saveGoalBodyweight: [75],
     saveProfileDetails: [{ display_name: 'pwned', motto: 'pwned' }],
     saveAvatarUrl: ['https://example.com/x.png'],
+    saveUnits: ['lbs', 'ft'],
+    saveHeight: [180],
+    completeOnboarding: [
+      {
+        displayName: 'pwned',
+        motto: '',
+        weightKg: 70,
+        heightCm: 180,
+        weightUnit: 'kg',
+        heightUnit: 'cm',
+        timeZone: 'Asia/Kolkata',
+      },
+    ],
     saveProgram: ['Pwned', []],
   }
   if (!(name in table)) throw new Error(`Unclassified Server Action: ${name}`)

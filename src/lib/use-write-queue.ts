@@ -74,6 +74,8 @@ export function useWriteQueue<T>({
   const jobs = useRef<T[]>([])
   const running = useRef(false)
   const halted = useRef(false)
+  /** Set just before the deliberate stale-build reload; see beforeunload. */
+  const reloading = useRef(false)
   const idleWaiters = useRef<((ok: boolean) => void)[]>([])
   const [state, setState] = useState<SaveState>({ status: 'idle' })
 
@@ -123,6 +125,7 @@ export function useWriteQueue<T>({
             if (stored && Date.now() - last > RELOAD_GUARD_MS) {
               writeStorage(reloadKey, String(Date.now()))
               halted.current = true
+              reloading.current = true
               window.location.reload()
               return
             }
@@ -210,14 +213,20 @@ export function useWriteQueue<T>({
   useEffect(() => {
     if (!hasPending) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      // The stale-build reload is deliberate; don't prompt for it.
-      if (halted.current && state.status !== 'failed') return
+      /*
+       * The stale-build reload is deliberate and everything unsaved is already
+       * stored for replay; prompting would let "Stay" cancel it and strand the
+       * page on a build that can no longer save. Keyed on a ref set right
+       * before the reload, not on render state, which this closure may hold
+       * a stale copy of.
+       */
+      if (reloading.current) return
       e.preventDefault()
       e.returnValue = ''
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [hasPending, state.status])
+  }, [hasPending])
 
   return { state, enqueue, retry, flush, restore }
 }

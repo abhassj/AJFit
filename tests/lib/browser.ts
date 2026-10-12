@@ -37,7 +37,17 @@ export async function closeBrowser() {
 }
 
 export async function phoneContext(
-  opts: { timeZone?: string; tzCookie?: boolean } = {},
+  opts: {
+    timeZone?: string
+    tzCookie?: boolean
+    /**
+     * Test accounts have no onboarded_at, so the V2 onboarding prompt would
+     * cover every page. Suites that are not about onboarding start with its
+     * "Later" already chosen for the session; the onboarding suites pass
+     * true to see it.
+     */
+    onboardingPrompt?: boolean
+  } = {},
 ): Promise<BrowserContext> {
   const timeZone = opts.timeZone ?? 'Asia/Kolkata'
   const context = await (
@@ -49,6 +59,11 @@ export async function phoneContext(
     hasTouch: true,
     timezoneId: timeZone,
   })
+  if (!opts.onboardingPrompt) {
+    await context.addInitScript(
+      `try { sessionStorage.setItem('ajfit-onboarding-later', '1') } catch {}`,
+    )
+  }
   if (opts.tzCookie ?? true) {
     await context.addCookies([
       { name: 'ajfit-tz', value: encodeURIComponent(timeZone), url: APP_URL },

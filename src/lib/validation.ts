@@ -136,3 +136,77 @@ export function validateSetEntry(
 
   return { reps: reps.value, weight: weight.value, error: null }
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * Unit-aware bodyweight and height (V2 Phase 4)
+ *
+ * The user types in their own unit; what comes back is always kilograms or
+ * centimetres, ready to store (decision D1). Ranges are checked on the metric
+ * value so a pound entry and a kilogram entry obey the same limits, and the
+ * message quotes the limits back in the unit the user typed.
+ * ---------------------------------------------------------------------------
+ */
+
+export const HEIGHT_CM_MIN = 50
+export const HEIGHT_CM_MAX = 272
+const LB_PER_KG = 1 / 0.45359237
+const CM_PER_IN = 2.54
+
+/** A bodyweight typed in `unit`, as kilograms. */
+export function parseBodyweightIn(
+  raw: string,
+  unit: 'kg' | 'lbs',
+): Parsed<number> {
+  const n = toFiniteNumber(raw)
+  if (n === null) return bad('Enter a weight.')
+  const kg = unit === 'kg' ? n : n / LB_PER_KG
+  if (kg < BODYWEIGHT_MIN || kg > BODYWEIGHT_MAX) {
+    const [lo, hi] =
+      unit === 'kg'
+        ? [BODYWEIGHT_MIN, BODYWEIGHT_MAX]
+        : [
+            Math.ceil(BODYWEIGHT_MIN * LB_PER_KG),
+            Math.floor(BODYWEIGHT_MAX * LB_PER_KG),
+          ]
+    return bad(`Weight must be between ${lo} and ${hi} ${unit}.`)
+  }
+  return ok(kg)
+}
+
+/** A height in centimetres. */
+export function parseHeightCm(raw: string): Parsed<number> {
+  const n = toFiniteNumber(raw)
+  if (n === null) return bad('Enter your height.')
+  if (n < HEIGHT_CM_MIN || n > HEIGHT_CM_MAX) {
+    return bad(
+      `Height must be between ${HEIGHT_CM_MIN} and ${HEIGHT_CM_MAX} cm.`,
+    )
+  }
+  return ok(n)
+}
+
+/** A height in feet and inches, as centimetres. Inches may be blank. */
+export function parseHeightFtIn(ftRaw: string, inRaw: string): Parsed<number> {
+  const ft = toFiniteNumber(ftRaw)
+  const inches = inRaw.trim() === '' ? 0 : toFiniteNumber(inRaw)
+  if (ft === null || inches === null) return bad('Enter your height.')
+  if (!Number.isInteger(ft) || inches < 0 || inches >= 12) {
+    return bad('Use whole feet and 0–11 inches.')
+  }
+  const cm = (ft * 12 + inches) * CM_PER_IN
+  if (cm < HEIGHT_CM_MIN || cm > HEIGHT_CM_MAX) {
+    return bad('Height must be between 1′8″ and 8′11″.')
+  }
+  return ok(cm)
+}
+
+/** A stored kilogram bodyweight re-checked on the server. */
+export function isPlausibleBodyweightKg(kg: number): boolean {
+  return Number.isFinite(kg) && kg >= BODYWEIGHT_MIN && kg <= BODYWEIGHT_MAX
+}
+
+/** A stored centimetre height re-checked on the server. */
+export function isPlausibleHeightCm(cm: number): boolean {
+  return Number.isFinite(cm) && cm >= HEIGHT_CM_MIN && cm <= HEIGHT_CM_MAX
+}
