@@ -49,7 +49,7 @@ export default async function AppLayout({
     } catch (e) {
       unstable_rethrow(e)
       console.error(
-        'AJFit: profile lookup failed, rendering shell without it',
+        'Ezlyfts: profile lookup failed, rendering shell without it',
         e,
       )
     }

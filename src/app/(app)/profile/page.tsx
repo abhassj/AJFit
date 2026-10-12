@@ -1,8 +1,9 @@
+import { pageTitle } from '@/lib/brand'
 import { signOut } from '@/app/auth/actions'
 import { ProfileForm } from '@/components/profile-form'
 import { getProfilePageData } from '@/lib/profile'
 
-export const metadata = { title: 'Profile · AJFit' }
+export const metadata = { title: pageTitle('Profile') }
 export const dynamic = 'force-dynamic'
 
 export default async function ProfilePage() {

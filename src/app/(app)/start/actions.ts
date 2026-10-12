@@ -68,7 +68,7 @@ export async function startSession(
     const day = program.days.find((d) =>
       programDayId ? d.id === programDayId : d.day_of_week === todayDow,
     )
-    if (!day) return fail('No program day for that selection.')
+    if (!day) return fail('No split day for that selection.')
     const label = DAY_LABELS[day.day_of_week]
     if (day.is_rest_day) {
       return fail(`${label} is a rest day in your split.`)

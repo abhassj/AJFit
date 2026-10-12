@@ -210,6 +210,19 @@ function toDraft(state: Record<DayOfWeek, DayState>): DraftDay[] {
   })
 }
 
+/** Rest given to a newly added exercise, in seconds (D10). */
+const DEFAULT_REST_SECONDS = 120
+
+/**
+ * The split's name for display. Accounts created before V2 were given the
+ * default name "My Program"; untouched, it reads as the page's own title now.
+ * Display only — the stored name is never rewritten.
+ */
+function displaySplitName(name: string): string {
+  const trimmed = name.trim()
+  return !trimmed || trimmed === 'My Program' ? 'My Workout Split' : trimmed
+}
+
 export function ProgramBuilder({
   program,
   catalog,
@@ -280,7 +293,10 @@ export function ProgramBuilder({
           subcategoryId: '',
           exerciseId: '',
           prescribedReps: '',
-          restSeconds: '',
+          // New exercises start with a 2-minute rest (decision D10). Client
+          // side only: the database default stays null, which means "no
+          // timer", and existing exercises are left as they are.
+          restSeconds: String(DEFAULT_REST_SECONDS),
           customFields: [],
         },
       ],
@@ -339,7 +355,7 @@ export function ProgramBuilder({
     startTransition(async () => {
       const result = await saveProgram(splitName, toDraft(state))
       if (result.ok) {
-        setMessage({ tone: 'success', text: 'Program saved.' })
+        setMessage({ tone: 'success', text: 'Split saved.' })
         setShowProblems(false)
         setEditing(false)
       } else {
@@ -352,7 +368,7 @@ export function ProgramBuilder({
     <main className="px-4 pt-2">
       <header className="flex items-start justify-between gap-3 px-1 pb-5">
         <div className="min-w-0 flex-1">
-          <p className="label-caps">Weekly Template</p>
+          <p className="label-caps">My Workout Split</p>
           {/*
            * The split's name was previously hard-coded into this heading while
            * programs.name sat in the database unreachable. In edit mode the
@@ -392,7 +408,7 @@ export function ProgramBuilder({
             </div>
           ) : (
             <h1 className="mt-1.5 truncate text-[28px] leading-tight font-black tracking-tight text-primary drop-shadow-sm">
-              {splitName.trim() || 'My Workout Split'}
+              {displaySplitName(splitName)}
             </h1>
           )}
         </div>
@@ -403,7 +419,7 @@ export function ProgramBuilder({
             setEditing((v) => !v)
             setMessage(null)
           }}
-          aria-label={editing ? 'Leave edit mode' : 'Edit program'}
+          aria-label={editing ? 'Leave edit mode' : 'Edit My Workout Split'}
           aria-pressed={editing}
           className={`relative overflow-hidden flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-300 backdrop-blur-xl ${
             editing
@@ -523,7 +539,7 @@ export function ProgramBuilder({
             disabled={pending}
             className="w-full"
           >
-            {pending ? 'Saving…' : 'Save Program'}
+            {pending ? 'Saving…' : 'Save Split'}
           </ActionButton>
         </div>
       )}

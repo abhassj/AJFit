@@ -1,3 +1,4 @@
+import { pageTitle } from '@/lib/brand'
 import { notFound } from 'next/navigation'
 
 import { DayDetail } from '@/components/day-detail'
@@ -20,7 +21,7 @@ export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: PageProps) {
   const { date } = await params
-  return { title: `${date} · AJFit` }
+  return { title: pageTitle(date) }
 }
 
 export default async function DayPage({ params, searchParams }: PageProps) {

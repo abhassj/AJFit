@@ -43,7 +43,7 @@ export function ErrorState({
   useEffect(() => {
     // The browser console is the only error reporting this app has; without
     // this line a production digest has nothing on the client side to match.
-    console.error('AJFit error boundary:', error)
+    console.error('Ezlyfts error boundary:', error)
   }, [error])
 
   return (

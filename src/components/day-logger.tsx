@@ -159,15 +159,15 @@ export function DayLogger({
         ) : day.exercises.length === 0 ? (
           <p className="surface rounded-2xl px-5 py-8 text-center text-sm text-secondary">
             {day.is_rest_day
-              ? 'This weekday is a rest day with no exercises in your program.'
-              : 'This weekday has no exercises in your program yet.'}
+              ? 'This weekday is a rest day with no exercises in your split.'
+              : 'This weekday has no exercises in your split yet.'}
           </p>
         ) : (
           <FadeIn>
             <section className="surface overflow-hidden rounded-2xl">
               <div className="px-5 pt-5 pb-3">
                 <h2 className="label-caps">
-                  {day.title?.trim() || 'From your program'}
+                  {day.title?.trim() || 'From your split'}
                 </h2>
                 <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
                   {day.exercises.length} exercise
@@ -225,7 +225,7 @@ export function DayLogger({
                   <div className="surface flex items-start gap-3 rounded-xl px-4 py-3.5">
                     <RestIcon className="mt-0.5 h-5 w-5 shrink-0 text-faint" />
                     <p className="text-[13px] leading-relaxed text-secondary">
-                      This is a rest day in your program — log a workout anyway?
+                      This is a rest day in your split — log a workout anyway?
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2.5">

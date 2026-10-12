@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /*
- * AJFit is a dark-only app (see docs/AJFit_Design_Language.md). Bind the `dark:`
+ * Ezlyfts is a dark-only app (see docs/AJFit_Design_Language.md). Bind the `dark:`
  * variant to an explicit class rather than the OS preference so Phase 0's auth
  * pages, which were written with `dark:` variants, render correctly regardless
  * of the visitor's system theme.

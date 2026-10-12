@@ -1,7 +1,8 @@
+import { BRAND } from '@/lib/brand'
 import type { MetadataRoute } from 'next'
 
 /**
- * Web app manifest — what makes AJFit installable to a phone home screen.
+ * Web app manifest — what makes Ezlyfts installable to a phone home screen.
  *
  * `display: 'standalone'` is the point of the exercise: launched from the home
  * screen the app opens without browser chrome, which matters because the whole
@@ -20,8 +21,8 @@ import type { MetadataRoute } from 'next'
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'AJFit',
-    short_name: 'AJFit',
+    name: BRAND.name,
+    short_name: BRAND.shortName,
     description: 'Personal workout programming and logging',
     start_url: '/',
     // Scope covers the whole origin so an in-app link never kicks the user out

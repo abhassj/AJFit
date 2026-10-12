@@ -1,5 +1,7 @@
 'use client'
 
+import { BRAND } from '@/lib/brand'
+
 import Link from 'next/link'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
@@ -76,7 +78,7 @@ export function AuthForm({
         <FadeIn>
           <div className="pb-7 text-center">
             <p className="text-[13px] font-bold tracking-[0.28em] text-danger uppercase">
-              AJFit
+              {BRAND.name}
             </p>
             <h1 className="mt-3 text-[30px] leading-tight font-bold tracking-tight text-primary">
               {title}

@@ -118,7 +118,7 @@ export function StartWorkout({
             Rest Day
           </h1>
           <p className="mx-auto max-w-xs text-sm leading-relaxed text-secondary">
-            {dayLabel} is marked as rest in your program. Nothing to log today.
+            {dayLabel} is marked as rest in your split. Nothing to log today.
           </p>
         </div>
 
@@ -148,7 +148,7 @@ export function StartWorkout({
           {day.exercises.length === 1 ? '' : 's'}
           {runningToday
             ? ' scheduled'
-            : ` from ${DAY_LABELS[selectedDow]}’s program`}
+            : ` from ${DAY_LABELS[selectedDow]}’s split`}
         </p>
       </header>
 

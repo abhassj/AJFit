@@ -1,5 +1,7 @@
 'use client'
 
+import { BRAND } from '@/lib/brand'
+
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -35,7 +37,7 @@ export function AppHeader({
         href="/"
         className="text-[13px] font-bold tracking-[0.22em] text-primary uppercase"
       >
-        AJFit
+        {BRAND.name}
       </Link>
 
       <Link

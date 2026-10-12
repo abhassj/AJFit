@@ -1,3 +1,4 @@
+import { BRAND } from '@/lib/brand'
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 
@@ -16,14 +17,14 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'AJFit',
+  title: BRAND.name,
   description: 'Personal workout programming and logging',
   // iOS ignores the web manifest for home-screen installs and reads these
   // instead: without them, Add to Home Screen produces a Safari screenshot as
   // the icon and opens the app in a browser tab rather than full screen.
   appleWebApp: {
     capable: true,
-    title: 'AJFit',
+    title: BRAND.shortName,
     // The app paints its own dark ground to the top edge, so the status bar
     // should sit over it rather than on an opaque bar of its own.
     statusBarStyle: 'black-translucent',
@@ -57,7 +58,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    // `dark` is fixed on: AJFit has no light theme (docs/AJFit_Design_Language.md).
+    // `dark` is fixed on: Ezlyfts has no light theme (docs/AJFit_Design_Language.md).
     //
     // suppressHydrationWarning is scoped to <html> and <body> on purpose.
     // Browser extensions inject attributes onto these two elements before React

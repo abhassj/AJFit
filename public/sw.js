@@ -1,5 +1,5 @@
 /**
- * AJFit service worker — app shell only.
+ * Ezlyfts service worker — app shell only.
  *
  * ============================================================================
  * WHAT THIS DOES NOT DO
@@ -22,7 +22,9 @@
  */
 
 // Bump this to invalidate everything: old caches are dropped on activate.
-const CACHE = 'ajfit-shell-v1'
+// v2: the Ezlyfts rename regenerated every icon under the same file names,
+// so the v1 cache would keep serving the old AJFit art.
+const CACHE = 'ezlyfts-shell-v2'
 
 /**
  * Static art, precached on install.
@@ -72,7 +74,9 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
+        Promise.all(
+          keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)),
+        ),
       )
       .then(() => self.clients.claim()),
   )

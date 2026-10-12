@@ -1,8 +1,9 @@
+import { pageTitle } from '@/lib/brand'
 import { signIn } from '@/app/auth/actions'
 import { AuthForm } from '@/app/auth/auth-form'
 import { AuthBackground } from '@/components/auth-background'
 
-export const metadata = { title: 'Sign in · AJFit' }
+export const metadata = { title: pageTitle('Sign in') }
 
 export default function SignInPage() {
   return (

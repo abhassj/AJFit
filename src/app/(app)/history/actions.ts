@@ -62,10 +62,10 @@ export async function startBackfill(
     const dow = programDayOfWeek ?? calendarDow
     const day = program.days.find((x) => x.day_of_week === dow)
 
-    if (!day) return fail('No program day for that selection.')
+    if (!day) return fail('No split day for that selection.')
     if (day.exercises.length === 0) {
       return fail(
-        `${DAY_LABELS[dow]} has no exercises in your program. Add some first.`,
+        `${DAY_LABELS[dow]} has no exercises in your split. Add some first.`,
       )
     }
 

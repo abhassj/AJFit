@@ -1,8 +1,9 @@
+import { pageTitle } from '@/lib/brand'
 import { HomeDashboard } from '@/components/home-dashboard'
 import { getHomeData } from '@/lib/home'
 import { getProfile } from '@/lib/profile'
 
-export const metadata = { title: 'Home · AJFit' }
+export const metadata = { title: pageTitle('Home') }
 
 // "Today" and the session log both move outside this render, so never cache.
 export const dynamic = 'force-dynamic'

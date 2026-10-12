@@ -1,5 +1,7 @@
 'use client'
 
+import { BRAND } from '@/lib/brand'
+
 import './globals.css'
 
 /**
@@ -49,7 +51,7 @@ export default function GlobalError({
               margin: 0,
             }}
           >
-            AJFit could not start
+            {BRAND.name} could not start
           </h1>
           <p
             style={{

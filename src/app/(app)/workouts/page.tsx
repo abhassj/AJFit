@@ -1,7 +1,8 @@
+import { pageTitle } from '@/lib/brand'
 import { CatalogBrowser } from '@/components/catalog-browser'
 import { getCatalog } from '@/lib/catalog'
 
-export const metadata = { title: 'Exercise Catalog · AJFit' }
+export const metadata = { title: pageTitle('Exercise Catalog') }
 
 export default async function WorkoutsPage() {
   const categories = await getCatalog()

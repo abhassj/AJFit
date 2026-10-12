@@ -9,7 +9,8 @@ import {
   type ProgramExercise,
 } from '@/lib/program-types'
 
-const DEFAULT_PROGRAM_NAME = 'My Program'
+// New splits are named after the page that shows them (V2).
+const DEFAULT_PROGRAM_NAME = 'My Workout Split'
 
 type ProgramExerciseRow = {
   id: string

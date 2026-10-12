@@ -1,3 +1,4 @@
+import { pageTitle } from '@/lib/brand'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
@@ -16,7 +17,7 @@ type PageProps = { params: Promise<{ exerciseId: string }> }
 export async function generateMetadata({ params }: PageProps) {
   const { exerciseId } = await params
   const exercise = await getExercise(exerciseId)
-  return { title: exercise ? `${exercise.name} · AJFit` : 'Exercise · AJFit' }
+  return { title: pageTitle(exercise ? exercise.name : 'Exercise') }
 }
 
 export default async function ExerciseDetailPage({ params }: PageProps) {

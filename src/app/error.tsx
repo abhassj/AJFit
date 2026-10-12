@@ -26,7 +26,7 @@ export default function RootError({
       error={error}
       retry={unstable_retry}
       title="Could not start the app"
-      description="AJFit could not load your account details. Trying again usually clears it; if not, sign in again."
+      description="Ezlyfts could not load your account details. Trying again usually clears it; if not, sign in again."
     />
   )
 }
