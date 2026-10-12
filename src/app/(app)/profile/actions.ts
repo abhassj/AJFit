@@ -151,11 +151,15 @@ export async function completeOnboarding(input: {
     ? input.timeZone!
     : await getViewerTimeZone()
 
-  const { error: weightError } = await supabase.from('weight_logs').insert({
-    user_id: user.id,
-    log_date: zonedDateKey(zone),
-    weight: input.weightKg,
-  })
+  // One entry per day: this replaces any entry already made today.
+  const { error: weightError } = await supabase.from('weight_logs').upsert(
+    {
+      user_id: user.id,
+      log_date: zonedDateKey(zone),
+      weight: input.weightKg,
+    },
+    { onConflict: 'user_id,log_date' },
+  )
   if (weightError)
     return fail(`Could not save your weight: ${weightError.message}`)
 

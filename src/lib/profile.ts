@@ -105,7 +105,10 @@ export async function getProfilePageData(): Promise<ProfilePageData> {
     supabase
       .from('weight_logs')
       .select('weight, log_date')
+      // Latest day, then the latest entry (one per day since 20261013120000;
+      // created_at settles any day logged before it).
       .order('log_date', { ascending: false })
+      .order('created_at', { ascending: false })
       .order('id', { ascending: false })
       .limit(1)
       .maybeSingle(),
@@ -133,6 +136,7 @@ export const getLatestBodyweightKg = cache(async (): Promise<number | null> => {
     .from('weight_logs')
     .select('weight')
     .order('log_date', { ascending: false })
+    .order('created_at', { ascending: false })
     .order('id', { ascending: false })
     .limit(1)
     .maybeSingle()

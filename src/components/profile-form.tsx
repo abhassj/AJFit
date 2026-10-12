@@ -64,16 +64,22 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
   const [pending, startTransition] = useTransition()
   const fileInput = useRef<HTMLInputElement>(null)
 
-  function run(
-    fn: () => Promise<Outcome>,
-    success: string,
+  function run<R extends Outcome>(
+    fn: () => Promise<R>,
+    success: string | ((result: Extract<R, { ok: true }>) => string),
     after?: () => void,
   ) {
     setMessage(null)
     startTransition(async () => {
       const result = await fn()
       if (result.ok) {
-        setMessage({ tone: 'success', text: success })
+        setMessage({
+          tone: 'success',
+          text:
+            typeof success === 'string'
+              ? success
+              : success(result as Extract<R, { ok: true }>),
+        })
         after?.()
       } else {
         setMessage({ tone: 'error', text: result.error })
@@ -405,7 +411,8 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
                   }
                   run(
                     () => logBodyweight(parsed.value),
-                    'Weight logged.',
+                    (r) =>
+                      r.replaced ? 'Today’s weight updated.' : 'Weight logged.',
                     () => setWeight(''),
                   )
                 }}

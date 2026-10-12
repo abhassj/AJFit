@@ -166,8 +166,13 @@ The schema is split into two halves: a **template** (the reusable weekly program
 |---|---|---|
 | id | uuid (PK) | |
 | user_id | uuid (FK) | |
-| log_date | date | The viewer's calendar date, in their timezone |
-| weight | numeric | **Kilograms.** Current bodyweight = most recent entry |
+| log_date | date | The viewer's calendar date, in their timezone. **Unique per user** (one entry per day; a new entry replaces that day's) |
+| weight | numeric | **Kilograms.** Current bodyweight = latest date, then latest `created_at` |
+| created_at | timestamptz | When the entry was made |
+
+`weight_logs_archive` (owner-only: RLS on, no policies, no grants to app roles)
+holds the same-day duplicates that existed before the one-per-day rule, with
+`archived_at`.
 
 **`categories`**
 

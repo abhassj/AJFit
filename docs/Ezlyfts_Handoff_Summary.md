@@ -62,17 +62,18 @@ and database names were deliberately not renamed — decision D12.)
 
 Migrations, in order:
 
-| File                                             | Concern                                                                                         |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| `20260805224706_phase1_schema`                   | Tables, RLS, catalog seed                                                                       |
-| `20260806204939_catalog_sort_order`              | Catalog display order                                                                           |
-| `20260810201328_profile_fields_and_avatars`      | Name, avatar, bio, avatars bucket                                                               |
-| `20260811202318_motto_rest_seconds_pushups`      | Motto, rest timer column, Push-Ups                                                              |
-| `20260814201343_catalog_read_only`               | Catalog SELECT-only                                                                             |
-| `20260814204500_revoke_latent_privileges`        | No anon grants, no TRUNCATE                                                                     |
-| `20261010120000_v2_units_exercise_snapshot_prs`  | Units, height, onboarding marker, exercise snapshot, `exercise_prs()`                           |
-| `20261010120100_v2_unilateral_arms`              | Eleven single-arm Arms exercises                                                                |
-| `20261012120000_v2_history_independent_of_split` | Slot link SET NULL, order/reps snapshot, slot-ownership RLS, catalog REFERENCES/TRIGGER revoked |
+| File                                             | Concern                                                                                                                                  |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260805224706_phase1_schema`                   | Tables, RLS, catalog seed                                                                                                                |
+| `20260806204939_catalog_sort_order`              | Catalog display order                                                                                                                    |
+| `20260810201328_profile_fields_and_avatars`      | Name, avatar, bio, avatars bucket                                                                                                        |
+| `20260811202318_motto_rest_seconds_pushups`      | Motto, rest timer column, Push-Ups                                                                                                       |
+| `20260814201343_catalog_read_only`               | Catalog SELECT-only                                                                                                                      |
+| `20260814204500_revoke_latent_privileges`        | No anon grants, no TRUNCATE                                                                                                              |
+| `20261010120000_v2_units_exercise_snapshot_prs`  | Units, height, onboarding marker, exercise snapshot, `exercise_prs()`                                                                    |
+| `20261010120100_v2_unilateral_arms`              | Eleven single-arm Arms exercises                                                                                                         |
+| `20261012120000_v2_history_independent_of_split` | Slot link SET NULL, order/reps snapshot, slot-ownership RLS, catalog REFERENCES/TRIGGER revoked                                          |
+| `20261013120000_weight_logs_one_per_day`         | One bodyweight entry per user per day (unique + replace-trigger), `created_at`, duplicates moved to the owner-only `weight_logs_archive` |
 
 ## 4. How the important parts work
 
@@ -121,7 +122,7 @@ npm run build && npx next start -p 3100
 APP_URL=http://localhost:3100 npm test
 ```
 
-At the end of V2: 31 suites, all passing. They include the baseline regression
+At the end of V2: 33 suites, all passing. They include the baseline regression
 suites (rebuilt in V2), DB/RLS audits, the action-auth sweep, timezone tests
 (Kolkata, London, Muscat) and phone-sized (414×896) browser flows.
 `tests/perf/` holds the latency proxy and the Start-screen timing script used
