@@ -368,7 +368,7 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
                   type="text"
                   inputMode="decimal"
                   value={weight}
-                  placeholder="e.g. 78.5"
+                  placeholder={unit === 'kg' ? 'e.g. 78.5' : 'e.g. 172'}
                   maxLength={6}
                   aria-invalid={weightError ? true : undefined}
                   aria-describedby={weightError ? 'weight-error' : undefined}
@@ -432,7 +432,7 @@ export function ProfileForm({ data }: { data: ProfilePageData }) {
                   type="text"
                   inputMode="decimal"
                   value={goal}
-                  placeholder="e.g. 75"
+                  placeholder={unit === 'kg' ? 'e.g. 75' : 'e.g. 165'}
                   maxLength={6}
                   aria-invalid={goalError ? true : undefined}
                   aria-describedby={goalError ? 'goal-error' : undefined}
