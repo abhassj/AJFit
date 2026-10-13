@@ -36,6 +36,8 @@ const ALLOWED = [
   /'ajfit-tz'/,
   /'ajfit-onboarding-later'/,
   /`ajfit-pending-writes:/,
+  // Added in Batch D: the stored rest period, same key namespace (D12).
+  /'ajfit-rest'/,
   /docs\/AJFit_[A-Za-z_]+\.md/,
   /keep serving the old AJFit art/,
   // brand.ts's own comment explaining the rename and what was kept.
@@ -191,6 +193,35 @@ export default suite('v2-phase5-brand', {
       await closeBrowser()
     }
     assert.deepEqual(offenders, [], offenders.join(' | '))
+  },
+
+  async '/version is public JSON that nothing may cache'() {
+    // BuildCheck asks this from any page, signed in or not; the proxy must
+    // not bounce it to /sign-in, and no cache (browser, CDN, service worker)
+    // may hold an old answer. No cookies on these requests.
+    const res = await fetch(`${APP_URL}/version`, { redirect: 'manual' })
+    assert.equal(
+      res.status,
+      200,
+      `status ${res.status} ${res.headers.get('location') ?? ''}`,
+    )
+    assert.match(res.headers.get('content-type') ?? '', /^application\/json/)
+    const cc = res.headers.get('cache-control') ?? ''
+    assert.match(cc, /\bno-store\b/, `cache-control: ${cc}`)
+    assert.doesNotMatch(cc, /\b(public|s-maxage|immutable)\b/, cc)
+    const body = (await res.json()) as { deploymentId: string | null }
+    assert.equal(typeof body.deploymentId, 'string')
+    // A path the proxy does guard still redirects when signed out, so the
+    // exclusion above is specific to /version.
+    const guarded = await fetch(`${APP_URL}/start`, { redirect: 'manual' })
+    assert.ok(
+      [302, 303, 307, 308].includes(guarded.status),
+      `/start signed out: ${guarded.status}`,
+    )
+    assert.match(guarded.headers.get('location') ?? '', /\/sign-in/)
+    // The service worker never answers /version (it only serves static assets).
+    const sw = await (await fetch(`${APP_URL}/sw.js`)).text()
+    assert.ok(!sw.includes('/version'), 'sw.js mentions /version')
   },
 
   async 'a page left open across a deploy reloads when the app comes back'() {
