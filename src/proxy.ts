@@ -19,7 +19,10 @@ export const config = {
      * a manifest that answers with an HTML sign-in page is not a manifest, so
      * the install prompt never appears, and a service worker served as
      * text/html is rejected outright for the wrong MIME type.
+     *
+     * /version (the live deployment id, for BuildCheck) is public for the same
+     * reason: a signed-out tab must get JSON back, not a sign-in redirect.
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|version$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 }
