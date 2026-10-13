@@ -18,7 +18,7 @@ import { RestTimer } from '@/components/rest-timer'
 import { ActionButton, Banner, TripleActionRow } from '@/components/ui'
 import { useUnits } from '@/components/units-provider'
 import { newId } from '@/lib/id'
-import { isNewRecord, type PersonalRecord } from '@/lib/pr-types'
+import { formatRecord, isNewRecord, type PersonalRecord } from '@/lib/pr-types'
 import {
   elapsedSeconds,
   formatClockTime,
@@ -34,7 +34,7 @@ import {
   runWrite,
   type SessionWrite,
 } from '@/lib/session-writes'
-import { displayWeight, formatWeight, toKg, type WeightUnit } from '@/lib/units'
+import { displayWeight, toKg, type WeightUnit } from '@/lib/units'
 import { useNow } from '@/lib/use-now'
 import { useWriteQueue, type SaveState } from '@/lib/use-write-queue'
 import { validateSetEntry } from '@/lib/validation'
@@ -684,9 +684,7 @@ function ExercisePanel({
           </p>
         )}
         <p className="mt-1 text-sm text-faint" data-testid="exercise-pr">
-          {record
-            ? `PR ${formatWeight(record.weight_kg, unit)}${record.reps ? ` × ${record.reps}` : ''}`
-            : 'No PR yet'}
+          {record ? `PR ${formatRecord(record, unit)}` : 'No PR yet'}
         </p>
 
         {exercise.sets.length > 0 && (

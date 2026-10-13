@@ -11,7 +11,14 @@ import { isNewRecord } from '@/lib/pr-types'
 import { prescribedSetCount, type SessionExercise } from '@/lib/session-types'
 import { applyWrite, type SessionWrite } from '@/lib/session-write-types'
 
-const record = { weight_kg: 60, reps: 8, achieved_on: '2026-09-01' }
+// Batch D: records now carry their kind (weight | reps). Fixture shape only;
+// previously { weight_kg: 60, reps: 8, achieved_on: '2026-09-01' }.
+const record = {
+  kind: 'weight' as const,
+  weight_kg: 60,
+  reps: 8,
+  achieved_on: '2026-09-01',
+}
 const lift = (weight: number | null, reps: number | null) => ({
   weight,
   reps_done: reps,

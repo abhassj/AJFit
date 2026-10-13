@@ -40,15 +40,14 @@ export default async function PersonalRecordsPage() {
           Personal Records
         </h1>
         <p className="mt-1.5 text-[13px] text-faint">
-          Heaviest set in a finished workout. Bodyweight-only exercises aren’t
-          ranked.
+          Heaviest set in a finished workout — or, for exercises done without
+          weight, the most reps in one set.
         </p>
       </header>
 
       {groups.length === 0 ? (
         <p className="surface rounded-2xl px-5 py-8 text-center text-sm leading-relaxed text-secondary">
-          No records yet. Finish a workout with a weighted set and your best
-          lifts will appear here.
+          No records yet. Finish a workout and your best lifts will appear here.
         </p>
       ) : (
         <div className="space-y-5">
@@ -71,9 +70,11 @@ export default async function PersonalRecordsPage() {
                     </span>
                     <span className="shrink-0 text-right tabular-nums">
                       <span className="block text-[15px] font-bold text-primary">
-                        {formatWeight(r.weight_kg, units.weight)}
+                        {r.kind === 'reps'
+                          ? `${r.reps} reps`
+                          : formatWeight(r.weight_kg, units.weight)}
                       </span>
-                      {r.reps != null && (
+                      {r.kind === 'weight' && r.reps != null && (
                         <span className="block text-[12px] text-secondary">
                           × {r.reps} reps
                         </span>

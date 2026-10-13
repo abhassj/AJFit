@@ -13,8 +13,7 @@ import { formatClockTime, formatDuration } from '@/lib/session-types'
 import { displayWeight } from '@/lib/units'
 import type { WorkoutSession } from '@/lib/session-types'
 import { shortWeekday } from '@/lib/home-types'
-import type { PersonalRecord } from '@/lib/pr-types'
-import { formatWeight } from '@/lib/units'
+import { formatRecord, type PersonalRecord } from '@/lib/pr-types'
 
 /** Pre-session screen: confirm and start, or explicitly skip the whole day. */
 export function StartWorkout({
@@ -204,7 +203,7 @@ export function StartWorkout({
                 </span>
                 <span className="shrink-0 text-[12px] text-faint tabular-nums">
                   {records[exercise.exercise_name]
-                    ? `PR ${formatWeight(records[exercise.exercise_name].weight_kg, unit)}`
+                    ? `PR ${formatRecord(records[exercise.exercise_name], unit)}`
                     : 'No PR yet'}
                 </span>
               </li>
