@@ -173,6 +173,14 @@ export default suite(
       const { user } = await restUser('restreplay', 60)
       const { ctx, page } = await begin(user)
       try {
+        // CHANGED in Batch D follow-ups: the rest begun by the tap now
+        // survives the reload (sessionStorage, by design), so it would be on
+        // screen after the replay either way. Drop the stored rest on every
+        // load so that any overlay seen below can only come from the replay.
+        // Previously the reload alone closed it, and no setup was needed.
+        await page.addInitScript(
+          `try { sessionStorage.removeItem('ajfit-rest') } catch {}`,
+        )
         let stale = true
         await page.route('**/start', async (route) => {
           const req = route.request()
@@ -262,6 +270,54 @@ export default suite(
           await overlay(page).getAttribute('data-rest-remaining'),
         )
         assert.ok(remaining >= 28 && remaining <= 31, `remaining ${remaining}`)
+      } finally {
+        await ctx.close()
+      }
+    },
+
+    async 'a BuildCheck reload mid-rest brings the timer back with the right time'() {
+      // Phone locked mid-rest, a deploy lands, the app comes back: BuildCheck
+      // reloads, and the rest (kept in sessionStorage) must survive it.
+      const { user } = await restUser('restreload', 300)
+      const { ctx, page } = await begin(user, { clock: true })
+      try {
+        await keypad(page, '10', '40')
+        await page.getByRole('button', { name: 'Log Set' }).click()
+        await overlay(page).waitFor()
+        await waitFor(() => setsInDb(user.id).length === 1)
+        await page.route('**/version', (route) =>
+          route.fulfill({ json: { deploymentId: 'newer-deploy' } }),
+        )
+        const reloaded = page.waitForEvent('load', { timeout: 10_000 })
+        await page.clock.fastForward(61_000)
+        await page.evaluate(
+          `document.dispatchEvent(new Event('visibilitychange'))`,
+        )
+        await reloaded
+        await page.unroute('**/version')
+        await overlay(page).waitFor()
+        await page.waitForTimeout(1200)
+        const remaining = Number(
+          await overlay(page).getAttribute('data-rest-remaining'),
+        )
+        assert.ok(
+          remaining >= 236 && remaining <= 240,
+          `remaining after reload ${remaining}`,
+        )
+        // Closing it clears the stored rest: a second reload stays closed,
+        // and the set was saved exactly once.
+        await overlay(page).getByRole('button', { name: 'Skip Rest' }).click()
+        // Under the installed fake clock Framer's exit fade never finishes,
+        // so check the stored rest is gone instead of waiting for the fade
+        // (the real-clock 'Skip closes it' test covers the overlay leaving).
+        await page.waitForFunction(
+          `sessionStorage.getItem('ajfit-rest') === null`,
+        )
+        await page.reload()
+        await page.getByRole('button', { name: 'Log Set' }).waitFor()
+        await page.waitForTimeout(400)
+        assert.equal(await overlay(page).count(), 0, 'reopened after Skip')
+        assert.deepEqual(setsInDb(user.id), [['1', '10', '40']])
       } finally {
         await ctx.close()
       }

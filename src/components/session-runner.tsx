@@ -35,6 +35,7 @@ import {
   type SessionWrite,
 } from '@/lib/session-writes'
 import { displayWeight, toKg, type WeightUnit } from '@/lib/units'
+import { useActiveRest } from '@/lib/use-active-rest'
 import { useNow } from '@/lib/use-now'
 import { useWriteQueue, type SaveState } from '@/lib/use-write-queue'
 import { validateSetEntry } from '@/lib/validation'
@@ -619,11 +620,14 @@ function ExercisePanel({
    * Only a fresh log on this screen starts it. Correcting a set, a replay
    * after a reload or a Retry never comes through handleDone, and the history
    * editor has no timer at all.
+   *
+   * The rest lives in sessionStorage (useActiveRest), so a reload mid-rest —
+   * BuildCheck after a deploy, typically — brings it back with the right time
+   * remaining.
    */
   const canRest = (exercise.rest_seconds ?? 0) > 0
-  const [restStartedAt, setRestStartedAt] = useState<number | null>(null)
-  // Whether the set that started this rest was a new record, for the overlay.
-  const [restNewRecord, setRestNewRecord] = useState(false)
+  const [rest, setRest] = useActiveRest(exercise.id)
+  const restStartedAt = rest?.startedAt ?? null
 
   function clear() {
     setReps('')
@@ -657,10 +661,7 @@ function ExercisePanel({
       handlers.logSet(exercise.id, r, kg)
       // Only a freshly logged set earns a rest period; correcting an old one
       // is bookkeeping, not work. Logging again while resting restarts it.
-      if (canRest) {
-        setRestNewRecord(newRecord)
-        setRestStartedAt(Date.now())
-      }
+      if (canRest) setRest({ startedAt: Date.now(), newRecord })
     }
     clear()
   }
@@ -755,11 +756,11 @@ function ExercisePanel({
             exerciseName={exercise.exercise_name}
             nextSet={exercise.sets.length + 1}
             totalSets={prescribedSetCount(exercise.prescribed_reps)}
-            newRecord={restNewRecord}
+            newRecord={rest?.newRecord ?? false}
             // One button whatever the countdown says: close rest and put the
             // keypad straight back on reps.
             onDone={() => {
-              setRestStartedAt(null)
+              setRest(null)
               setField('reps')
             }}
           />

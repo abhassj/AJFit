@@ -2,6 +2,7 @@
 
 import { m, useReducedMotion } from 'framer-motion'
 import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 
 import Image from 'next/image'
 
@@ -92,7 +93,14 @@ export function RestTimer({
       ? `Set ${nextSet} of ${totalSets}`
       : `Set ${nextSet}`
 
-  return (
+  /*
+   * Portalled to <body>: rendered in place, the overlay sat inside the
+   * runner's swipe panel, whose transform makes a stacking context — so the
+   * fixed bottom nav (z-50) could land on top of it (z-100) and swallow taps,
+   * which is what happened when a rest was restored after a reload. Only ever
+   * mounted on the client (rest state comes from sessionStorage).
+   */
+  return createPortal(
     <m.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -192,6 +200,7 @@ export function RestTimer({
           {done && <ChevronRightIcon className="h-5 w-5" />}
         </button>
       </div>
-    </m.div>
+    </m.div>,
+    document.body,
   )
 }
