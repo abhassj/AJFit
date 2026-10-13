@@ -12,6 +12,22 @@ export const BRAND = {
   name: 'Ezlyfts',
   shortName: 'Ezlyfts',
   monogram: 'Ez',
+  /**
+   * The hazard-sign tagline on the sign-in and sign-up pages. Swap the copy
+   * here; the layout takes any lengths. Alternates kept for later:
+   *
+   *   'SERIOUS LIFTERS ONLY.'
+   *     'Excuses are not a supported feature.'
+   *   'WARNING: MAY CAUSE GAINS.'
+   *     'Side effects include discipline and zero rest days off.'
+   *   'NOT FOR THE CASUAL.'
+   *     'Built for the ones who actually show up.'
+   */
+  tagline: {
+    label: 'Caution',
+    headline: 'NO EXCUSES BEYOND THIS POINT.',
+    sub: 'Built for people who are dead serious about getting fit.',
+  },
 } as const
 
 /** "Page · Ezlyfts", the format every page title uses. */

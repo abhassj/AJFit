@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
 
+import { AuthTagline } from '@/components/auth-tagline'
 import { FadeIn, MotionProvider } from '@/components/motion'
 import { Banner } from '@/components/ui'
 
@@ -88,6 +89,8 @@ export function AuthForm({
             </p>
           </div>
         </FadeIn>
+
+        <AuthTagline />
 
         <FadeIn delay={0.08}>
           <div className="surface rounded-2xl p-6">

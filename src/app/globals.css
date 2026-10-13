@@ -35,6 +35,10 @@
   --color-pr: #8b5cf6;
   --color-pr-text: #c4b5fd;
 
+  /* Hazard amber for the auth tagline chip: 8.12:1 on its 12% tint over
+     --color-base (7.05:1 over --color-card). */
+  --color-hazard: #f5b83d;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

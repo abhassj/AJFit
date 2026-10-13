@@ -73,11 +73,17 @@ export default suite('v2-phase5-brand', {
   },
 
   'brand constants and the manifest say Ezlyfts / Ez'() {
-    assert.deepEqual(BRAND, {
-      name: 'Ezlyfts',
-      shortName: 'Ezlyfts',
-      monogram: 'Ez',
-    })
+    // CHANGED in Batch D: BRAND also carries the auth tagline now, so the
+    // identity fields are compared on their own. Previously:
+    //   assert.deepEqual(BRAND, { name: 'Ezlyfts', shortName: 'Ezlyfts', monogram: 'Ez' })
+    assert.deepEqual(
+      {
+        name: BRAND.name,
+        shortName: BRAND.shortName,
+        monogram: BRAND.monogram,
+      },
+      { name: 'Ezlyfts', shortName: 'Ezlyfts', monogram: 'Ez' },
+    )
     const m = manifest()
     assert.equal(m.name, 'Ezlyfts')
     assert.equal(m.short_name, 'Ezlyfts')

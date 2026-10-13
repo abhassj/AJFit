@@ -293,14 +293,12 @@ export default suite(
           .single(),
       )
       must(
-        await user.client
-          .from('sets')
-          .insert({
-            session_exercise_id: se.id,
-            set_number: 1,
-            reps_done: 8,
-            weight: 60,
-          }),
+        await user.client.from('sets').insert({
+          session_exercise_id: se.id,
+          set_number: 1,
+          reps_done: 8,
+          weight: 60,
+        }),
       )
       const { ctx, page } = await begin(user)
       try {
