@@ -27,6 +27,8 @@ const nextConfig: NextConfig = {
    * the session runner recovers from a stale one by saving its unsaved sets,
    * reloading and replaying them (src/lib/use-write-queue.ts).
    */
+  // Keep in step with currentDeploymentId() in src/lib/deployment-id.ts,
+  // which /version reports and BuildCheck compares with the page's own id.
   deploymentId: process.env.NEXT_DEPLOYMENT_ID
     ? undefined
     : process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12),
