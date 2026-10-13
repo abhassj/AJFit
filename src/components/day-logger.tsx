@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence, m, useReducedMotion } from 'framer-motion'
 import { useState, useTransition } from 'react'
 
@@ -79,6 +80,7 @@ export function DayLogger({
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [selectedDow, setSelectedDow] = useState<DayOfWeek>(calendarDow)
   const [pending, startTransition] = useTransition()
+  const router = useRouter()
 
   // Which program day this backfill will follow. Defaults to the date's own
   // weekday, but a missed session may well have been a different day's workout.
@@ -92,7 +94,19 @@ export function DayLogger({
     setError(null)
     startTransition(async () => {
       const result = await fn()
-      if (!result.ok) setError(result.error)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      /*
+       * The edit actions call refresh() server-side, but the router does not
+       * always commit that refreshed tree: intermittently the save landed and
+       * the list stayed stale until a reload (seen on the live build too), and
+       * someone re-entering the "missing" set would log it twice. Refreshing
+       * from the client once the save is confirmed always renders the saved
+       * state.
+       */
+      router.refresh()
     })
   }
 
