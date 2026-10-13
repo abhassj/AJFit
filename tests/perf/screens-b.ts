@@ -116,7 +116,7 @@ async function main() {
     await page.waitForTimeout(300)
     await page.evaluate('window.scrollTo(0, 280)')
     await shot('b3-runner-pr')
-    await page.getByRole('button', { name: /Begin Rest/ }).click()
+    // Rest opens by itself after a fresh set (Batch D).
     await page.waitForTimeout(1500)
     await shot('b4-rest')
     await page.getByTestId('rest-timer').getByRole('button').click()

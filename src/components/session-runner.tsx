@@ -10,7 +10,6 @@ import {
   ChevronDownIcon,
   PauseIcon,
   PlayIcon,
-  RestIcon,
   SkipIcon,
 } from '@/components/icons'
 import { NumericEntry, type NumericField } from '@/components/numeric-keypad'
@@ -612,13 +611,19 @@ function ExercisePanel({
   const [showComment, setShowComment] = useState(!!exercise.comment)
 
   /*
-   * Rest is offered after a set is logged, and only when the template actually
-   * defines a rest period. An exercise with rest_seconds unset simply never
-   * shows the option — that is the configured behaviour, not a missing feature.
+   * Rest starts by itself the moment a NEW set is logged, when the template
+   * defines a rest period (rest_seconds > 0; null or 0 means no timer). It
+   * opens on the tap, before the save — the save runs in the background and a
+   * failure still shows its Retry alert once the timer is closed.
+   *
+   * Only a fresh log on this screen starts it. Correcting a set, a replay
+   * after a reload or a Retry never comes through handleDone, and the history
+   * editor has no timer at all.
    */
   const canRest = (exercise.rest_seconds ?? 0) > 0
   const [restStartedAt, setRestStartedAt] = useState<number | null>(null)
-  const [offerRest, setOfferRest] = useState(false)
+  // Whether the set that started this rest was a new record, for the overlay.
+  const [restNewRecord, setRestNewRecord] = useState(false)
 
   function clear() {
     setReps('')
@@ -644,10 +649,18 @@ function ExercisePanel({
     if (editingSetId) {
       handlers.updateSet(exercise.id, editingSetId, r, kg)
     } else {
+      const newRecord = isNewRecord(
+        { weight: kg, reps_done: r },
+        exercise.sets,
+        record,
+      )
       handlers.logSet(exercise.id, r, kg)
       // Only a freshly logged set earns a rest period; correcting an old one
-      // is bookkeeping, not work.
-      if (canRest) setOfferRest(true)
+      // is bookkeeping, not work. Logging again while resting restarts it.
+      if (canRest) {
+        setRestNewRecord(newRecord)
+        setRestStartedAt(Date.now())
+      }
     }
     clear()
   }
@@ -742,6 +755,7 @@ function ExercisePanel({
             exerciseName={exercise.exercise_name}
             nextSet={exercise.sets.length + 1}
             totalSets={prescribedSetCount(exercise.prescribed_reps)}
+            newRecord={restNewRecord}
             // One button whatever the countdown says: close rest and put the
             // keypad straight back on reps.
             onDone={() => {
@@ -754,25 +768,6 @@ function ExercisePanel({
 
       {restStartedAt === null && (
         <>
-          {offerRest && canRest && (
-            <div className="mt-3">
-              <ActionButton
-                tone="danger"
-                className="w-full"
-                onClick={() => {
-                  setOfferRest(false)
-                  // Clock read here, in the handler — not during render.
-                  setRestStartedAt(Date.now())
-                }}
-              >
-                <span className="flex items-center gap-2">
-                  <RestIcon className="h-5 w-5" />
-                  Begin Rest · {exercise.rest_seconds}s
-                </span>
-              </ActionButton>
-            </div>
-          )}
-
           <div className="mt-3 grid grid-cols-2 gap-2.5">
             <ActionButton
               tone="primary"

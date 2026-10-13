@@ -6,6 +6,7 @@ import { useEffect, useRef } from 'react'
 import Image from 'next/image'
 
 import { ChevronRightIcon } from '@/components/icons'
+import { NewPrBadge } from '@/components/pr-pill'
 import { formatDuration } from '@/lib/session-types'
 import { useNow } from '@/lib/use-now'
 
@@ -38,6 +39,7 @@ export function RestTimer({
   exerciseName,
   nextSet,
   totalSets,
+  newRecord = false,
   onDone,
 }: {
   /**
@@ -52,6 +54,8 @@ export function RestTimer({
   nextSet: number
   /** From the prescription, when it names one ("3x10" → 3). */
   totalSets: number | null
+  /** The set just logged beat the record: show the badge here too. */
+  newRecord?: boolean
   onDone: () => void
 }) {
   const now = useNow()
@@ -116,6 +120,7 @@ export function RestTimer({
           {exerciseName}
           <span className="text-white/60"> · {setLabel}</span>
         </p>
+        {newRecord && <NewPrBadge className="mt-3" />}
 
         {/*
          * The pulse is a transform (scale) on the ring's wrapper, so it stays on

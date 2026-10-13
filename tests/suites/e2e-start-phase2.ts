@@ -108,6 +108,11 @@ export default suite(
 
         await keypad(page, '5', '65')
         await page.getByRole('button', { name: 'Log Set' }).click()
+        // CHANGED in Batch D: Lat Pulldown has 5s rest here, and rest now opens
+        // by itself after a fresh set, covering the keypad. Close it first.
+        // (Previously the next keypad tap followed directly.)
+        await page.getByTestId('rest-timer').getByRole('button').click()
+        await page.getByTestId('rest-timer').waitFor({ state: 'detached' })
         await keypad(page, '8', '50')
         await page.getByRole('button', { name: 'Log Set' }).click()
         await page.getByText('8 reps × 50 kg').waitFor()
@@ -126,7 +131,8 @@ export default suite(
         await startTodaysWorkout(page)
         await keypad(page, '10', '40')
         await page.getByRole('button', { name: 'Log Set' }).click()
-        await page.getByRole('button', { name: /Begin Rest/ }).click()
+        // CHANGED in Batch D: rest opens by itself after a fresh set.
+        // Previously: await page.getByRole('button', { name: /Begin Rest/ }).click()
 
         const overlay = page.getByTestId('rest-timer')
         await overlay.waitFor()
