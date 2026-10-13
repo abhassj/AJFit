@@ -212,3 +212,17 @@ export function WifiOffIcon({ className }: IconProps) {
     </svg>
   )
 }
+
+/** Personal records. A cup on a short stem, in the set's stroke style. */
+export function TrophyIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M8 4h8v5a4 4 0 0 1-8 0V4Z" />
+      <path d="M8 6H5.5a2 2 0 0 0 2.2 3.9" />
+      <path d="M16 6h2.5a2 2 0 0 1-2.2 3.9" />
+      <path d="M12 13v3.5" />
+      <path d="M9 20h6" />
+      <path d="M10 16.5h4V20h-4z" />
+    </svg>
+  )
+}

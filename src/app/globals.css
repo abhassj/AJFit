@@ -28,6 +28,13 @@
   --color-danger: #e5484d;
   --color-success: #22c55e;
 
+  /* Personal records (Batch D). The violet is the pill's tint and border; the
+     text colour is a lighter violet that measures 7.12:1 on the pill's 18%
+     tint over --color-card (8.05:1 over --color-base, 6.43:1 over
+     --color-card-raised) — WCAG AA everywhere the pill sits. */
+  --color-pr: #8b5cf6;
+  --color-pr-text: #c4b5fd;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

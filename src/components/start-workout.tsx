@@ -7,13 +7,14 @@ import { skipDay, startSession } from '@/app/(app)/start/actions'
 import { CheckIcon, PlayIcon, RestIcon, SkipIcon } from '@/components/icons'
 import { ActionButton, Banner } from '@/components/ui'
 import { ProgramDayPicker } from '@/components/program-day-picker'
+import { PrPill } from '@/components/pr-pill'
 import { DAY_LABELS, type DayOfWeek, type Program } from '@/lib/program-types'
 import { useUnits } from '@/components/units-provider'
 import { formatClockTime, formatDuration } from '@/lib/session-types'
 import { displayWeight } from '@/lib/units'
 import type { WorkoutSession } from '@/lib/session-types'
 import { shortWeekday } from '@/lib/home-types'
-import { formatRecord, type PersonalRecord } from '@/lib/pr-types'
+import type { PersonalRecord } from '@/lib/pr-types'
 
 /** Pre-session screen: confirm and start, or explicitly skip the whole day. */
 export function StartWorkout({
@@ -201,10 +202,12 @@ export function StartWorkout({
                     </span>
                   )}
                 </span>
-                <span className="shrink-0 text-[12px] text-faint tabular-nums">
-                  {records[exercise.exercise_name]
-                    ? `PR ${formatRecord(records[exercise.exercise_name], unit)}`
-                    : 'No PR yet'}
+                <span className="shrink-0">
+                  <PrPill
+                    record={records[exercise.exercise_name]}
+                    unit={unit}
+                    size="sm"
+                  />
                 </span>
               </li>
             ))}

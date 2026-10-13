@@ -150,6 +150,72 @@ export default suite(
       }
     },
 
+    async 'the PR line is a violet token pill; No PR yet stays muted; no blur'() {
+      // Batch D item 2. --color-pr-text is #C4B5FD = rgb(196, 181, 253);
+      // --color-secondary is #8B9099 = rgb(139, 144, 153).
+      const user = await seventeenRepUser('prstyle')
+      const ctx = await phoneContext()
+      const page = await ctx.newPage()
+      try {
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await signIn(page, user)
+        await startTodaysWorkout(page)
+        const pill = page.getByTestId('exercise-pr')
+        const style = await pill.evaluate((el) => {
+          const cs = getComputedStyle(el)
+          return {
+            color: cs.color,
+            transform: cs.textTransform,
+            weight: cs.fontWeight,
+            blur: cs.backdropFilter,
+            icon: !!el.querySelector('svg'),
+          }
+        })
+        assert.deepEqual(style, {
+          color: 'rgb(196, 181, 253)',
+          transform: 'uppercase',
+          weight: '700',
+          blur: 'none',
+          icon: true,
+        })
+
+        // A new record: the badge, static under reduced motion.
+        await repsOnly(page, '20')
+        const badge = page.getByText('New PR', { exact: true })
+        await badge.waitFor()
+        assert.equal(
+          await badge.evaluate((el) => getComputedStyle(el).transform),
+          'none',
+        )
+      } finally {
+        await ctx.close()
+      }
+
+      const fresh = await newUser('prstylenone')
+      await seedProgram(fresh, {
+        days: Object.fromEntries(
+          DAYS.map((d) => [
+            d,
+            { title: 'Arms', exercises: ['Barbell Bicep Curl'] },
+          ]),
+        ),
+      })
+      const ctx2 = await phoneContext()
+      const page2 = await ctx2.newPage()
+      try {
+        await signIn(page2, fresh)
+        await startTodaysWorkout(page2)
+        const none = page2.getByTestId('exercise-pr')
+        assert.equal((await none.textContent())?.trim(), 'No PR yet')
+        assert.equal(
+          await none.evaluate((el) => getComputedStyle(el).color),
+          'rgb(139, 144, 153)',
+        )
+      } finally {
+        await ctx2.close()
+      }
+    },
+
     async 'the PR page lists the reps record, without the old exclusion note'() {
       const user = await seventeenRepUser('prrepspage')
       const ctx = await phoneContext()

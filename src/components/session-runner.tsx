@@ -14,11 +14,12 @@ import {
   SkipIcon,
 } from '@/components/icons'
 import { NumericEntry, type NumericField } from '@/components/numeric-keypad'
+import { NewPrBadge, PrPill } from '@/components/pr-pill'
 import { RestTimer } from '@/components/rest-timer'
 import { ActionButton, Banner, TripleActionRow } from '@/components/ui'
 import { useUnits } from '@/components/units-provider'
 import { newId } from '@/lib/id'
-import { formatRecord, isNewRecord, type PersonalRecord } from '@/lib/pr-types'
+import { isNewRecord, type PersonalRecord } from '@/lib/pr-types'
 import {
   elapsedSeconds,
   formatClockTime,
@@ -683,9 +684,9 @@ function ExercisePanel({
             {canRest && `${exercise.rest_seconds}s rest`}
           </p>
         )}
-        <p className="mt-1 text-sm text-faint" data-testid="exercise-pr">
-          {record ? `PR ${formatRecord(record, unit)}` : 'No PR yet'}
-        </p>
+        <div className="mt-2">
+          <PrPill record={record} unit={unit} testId="exercise-pr" />
+        </div>
 
         {exercise.sets.length > 0 && (
           <ul className="mt-3 space-y-1">
@@ -700,9 +701,7 @@ function ExercisePanel({
               >
                 <span className="label-caps">Set {set.set_number}</span>
                 {isNewRecord(set, exercise.sets.slice(0, i), record) && (
-                  <span className="rounded-full bg-success/15 px-2 py-0.5 text-[11px] font-bold tracking-wide text-success uppercase">
-                    New PR
-                  </span>
+                  <NewPrBadge />
                 )}
                 <span className="ml-auto">
                   {set.reps_done ?? '—'} reps ×{' '}
